@@ -1,0 +1,5 @@
+.claude/
+node_modules/
+rutinapp-respaldo-*.json
+.DS_Store
+Thumbs.db
