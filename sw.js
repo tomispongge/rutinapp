@@ -1,7 +1,7 @@
 // Service worker: permite usar Rutinapp sin internet.
 // Estrategia "red primero": con conexión siempre llega la última versión;
 // sin conexión responde desde la caché. Sube VERSION al publicar cambios grandes.
-const VERSION = 'rutinapp-0.1.3';
+const VERSION = 'rutinapp-0.1.4';
 const BASE = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/ui.js', './js/util.js', './js/store.js', './js/seed.js',

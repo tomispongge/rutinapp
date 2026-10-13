@@ -203,6 +203,10 @@ export function minutosPantalla(S, ninoId, dia) {
   return vivos(S, ninoId, 'pantalla', dia).reduce((a, e) => a + (e.minutos || 0), 0);
 }
 
+export function minutosEstudio(S, ninoId, dia) {
+  return vivos(S, ninoId, 'cronometro', dia).reduce((a, e) => a + (e.minutos || 0), 0);
+}
+
 export function excesoDia(S, ninoId, dia) {
   return vivos(S, ninoId, 'pantalla', dia).reduce((a, e) => a + (e.exceso || 0), 0);
 }
@@ -240,7 +244,10 @@ export function semana(S, k, dia) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = addDays(ini, i);
     // Días antes de instalar la app o futuros: sin datos, se muestran como "—".
-    return { dia: d, futuro: d > dia || d < S.creado, ...progresoDia(S, k, d), pantalla: minutosPantalla(S, k.id, d) };
+    return {
+      dia: d, futuro: d > dia || d < S.creado, ...progresoDia(S, k, d),
+      pantalla: minutosPantalla(S, k.id, d), estudio: minutosEstudio(S, k.id, d),
+    };
   });
 }
 

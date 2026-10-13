@@ -43,6 +43,7 @@ function render() {
 function alVolver() {
   const nuevos = A.ingerirInbox();
   A.cerrarTimersViejos();
+  A.cerrarCronosViejos();
   const enFormulario = location.hash.startsWith('#/adulto') || location.hash.startsWith('#/configurar');
   if (nuevos || !enFormulario) render();
 }
@@ -50,6 +51,7 @@ function alVolver() {
 cargar();
 A.ingerirInbox();
 A.cerrarTimersViejos();
+A.cerrarCronosViejos();
 setRenderer(render);
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) alVolver(); });

@@ -19,13 +19,66 @@ export function marcarPaso(ninoId, rutinaId, pasoId, extra = {}) {
   if (extra.ts) ev.ts = extra.ts;
   push(ev);
   let bonus = 0;
+  let minutosEstudio = null;
   const r = S.rutinas.find(x => x.id === rutinaId);
   if (r && L.progresoRutina(S, ninoId, r, dia).completa && !L.eventoRutina(S, ninoId, rutinaId, dia)) {
     push({ tipo: 'rutina', ninoId, rutinaId, dia, estrellas: 2 });
     bonus = 2;
+    // Al completar el estudio, el cronómetro se detiene y guarda los minutos.
+    const c = S.cronos[ninoId];
+    if (c && c.rutinaId === rutinaId) {
+      const e = terminarCrono(ninoId);
+      if (e) minutosEstudio = e.minutos;
+    }
   }
   guardar();
-  return { nuevo: true, estrellas: 1 + bonus, completa: bonus > 0 };
+  return { nuevo: true, estrellas: 1 + bonus, completa: bonus > 0, minutosEstudio };
+}
+
+// ---------------- Cronómetro de estudio ----------------
+// Uno por niño. Usa marcas de tiempo: sigue contando mientras el niño está en
+// Applicatzo o con el iPad bloqueado.
+export function crono(ninoId) {
+  return S.cronos[ninoId] || null;
+}
+
+export function iniciarCrono(ninoId, rutinaId) {
+  const dia = dayKey();
+  const c = S.cronos[ninoId];
+  if (c && (c.dia !== dia || c.rutinaId !== rutinaId)) terminarCrono(ninoId);
+  if (!S.cronos[ninoId]) S.cronos[ninoId] = { rutinaId, dia, inicio: null, acumMs: 0 };
+  const c2 = S.cronos[ninoId];
+  if (!c2.inicio) c2.inicio = Date.now();
+  guardar();
+}
+
+export function pausarCrono(ninoId) {
+  const c = S.cronos[ninoId];
+  if (c && c.inicio) {
+    c.acumMs += Date.now() - c.inicio;
+    c.inicio = null;
+    guardar();
+  }
+}
+
+// Guarda los minutos estudiados. Tope: el doble de lo planificado (mínimo 30 min),
+// por si el cronómetro quedó corriendo olvidado.
+export function terminarCrono(ninoId) {
+  const c = S.cronos[ninoId];
+  if (!c) return null;
+  delete S.cronos[ninoId];
+  const r = S.rutinas.find(x => x.id === c.rutinaId);
+  const tope = Math.max(30, 2 * (r ? L.duracion(r) : 30));
+  const min = Math.min(tope, Math.round(L.transcurridoMs(c) / 60000));
+  const e = min > 0 ? push({ tipo: 'cronometro', ninoId, rutinaId: c.rutinaId, dia: c.dia, minutos: min }) : null;
+  guardar();
+  return e;
+}
+
+export function cerrarCronosViejos() {
+  for (const [id, c] of Object.entries(S.cronos)) {
+    if (c.dia !== dayKey()) terminarCrono(id);
+  }
 }
 
 export function desmarcarPaso(ninoId, rutinaId, pasoId, dia = dayKey()) {

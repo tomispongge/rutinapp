@@ -184,6 +184,7 @@ export function seedState() {
     pruebas: [],
     eventos: [],
     timers: {},
+    cronos: {},
     desbloqueos: {},
   };
 }

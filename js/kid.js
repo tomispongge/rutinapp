@@ -3,7 +3,7 @@ import { S } from './store.js';
 import * as A from './acciones.js';
 import * as L from './logic.js';
 import { MATERIAS } from './seed.js';
-import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, speak, chime, DIAS_CORTOS, weekday, addDays } from './util.js';
+import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, speak, chime, mmss, DIAS_CORTOS, weekday, addDays } from './util.js';
 import { ir, rerender, intervalo, toast, modal, celebrar, pinPad, disco, barra } from './ui.js';
 
 const volver = (k, texto = '← Mi día') =>
@@ -53,7 +53,7 @@ function itemsDelDia(k, dia) {
     if (r.tipo === 'llegada') finLlegada = fin;
     items.push({
       hora, fin, emoji: r.emoji, titulo: r.nombre, hecho: p.completa, prog: p.total ? p.n / p.total : 0,
-      sub: r.tipo === 'noche' ? `${p.n}/${p.total} · luces ${L.lucesApagadas(S, k, dia)}` : `${p.n}/${p.total} pasos`,
+      sub: r.tipo === 'noche' ? `${p.n}/${p.total} · luces ${L.lucesApagadas(S, k, dia)}` : `${p.n}/${p.total} pasos${subCrono(k, r, dia)}`,
       abrir: () => ir(`#/n/${k.id}/r/${r.id}`),
     });
   }
@@ -216,9 +216,15 @@ export function vistaRutina(k, r) {
         h('h1', {}, r.nombre),
         h('p', { class: 'muted' }, [hora ? `Empieza ${hora}` : '', `${L.duracion(r)} min`, r.tipo === 'noche' ? `Luces apagadas ${L.lucesApagadas(S, k, dia)}` : ''].filter(Boolean).join(' · ')))),
     barra(prog.total ? prog.n / prog.total : 0, k.color),
+    r.tipo === 'estudio' ? tarjetaCrono(k, r, prog.completa) : null,
     prog.completa
       ? h('div', { class: 'aviso ok' }, '🎉 ¡Rutina completa! Ganaste 2 ⭐ extra.')
-      : h('button', { class: 'btn big ancho', style: { background: k.color }, onclick: () => ir(`#/n/${k.id}/r/${r.id}/paso`) }, '▶ Paso a paso'),
+      : h('button', {
+        class: 'btn big ancho', style: { background: k.color }, onclick: () => {
+          if (r.tipo === 'estudio') A.iniciarCrono(k.id, r.id);
+          ir(`#/n/${k.id}/r/${r.id}/paso`);
+        },
+      }, '▶ Paso a paso'),
     h('ol', { class: 'pasos' }, r.pasos.map(p => {
       const hecho = hechos.has(p.id);
       const texto = L.textoPaso(S, k, p, dia);
@@ -229,7 +235,7 @@ export function vistaRutina(k, r) {
           onclick: () => {
             if (hecho) { A.desmarcarPaso(k.id, r.id, p.id); rerender(); return; }
             const res = A.marcarPaso(k.id, r.id, p.id);
-            if (res.nuevo) celebrar(res.estrellas, res.completa ? '¡Rutina completa! +3 ⭐' : '+1 ⭐');
+            if (res.nuevo) celebrar(res.estrellas, textoCelebracion(res));
             rerender();
           },
         },
@@ -240,6 +246,75 @@ export function vistaRutina(k, r) {
           botonAccion(k, p),
           h('button', { class: 'btn ghost chico', 'aria-label': 'Escuchar', onclick: () => speak(texto) }, '🔊')));
     })));
+}
+
+const textoCelebracion = res => !res.completa ? '+1 ⭐'
+  : res.minutosEstudio ? `¡Estudio completo! ${res.minutosEstudio} min · +3 ⭐` : '¡Rutina completa! +3 ⭐';
+
+// ---------------- Cronómetro de estudio ----------------
+const segCrono = (k, r) => {
+  const c = A.crono(k.id);
+  return c && c.rutinaId === r.id && c.dia === dayKey() ? L.transcurridoMs(c) / 1000 : 0;
+};
+
+function subCrono(k, r, dia) {
+  if (r.tipo !== 'estudio') return '';
+  const c = A.crono(k.id);
+  if (c && c.rutinaId === r.id && c.dia === dia) return ` · ⏱️ ${Math.floor(segCrono(k, r) / 60)} min${c.inicio ? '' : ' (pausa)'}`;
+  const min = L.minutosEstudio(S, k.id, dia);
+  return min ? ` · ⏱️ ${min} min` : '';
+}
+
+function tarjetaCrono(k, r, completa) {
+  if (completa && !A.crono(k.id)) {
+    const min = L.minutosEstudio(S, k.id, dayKey());
+    return min ? h('div', { class: 'aviso ok' }, `⏱️ Hoy estudiaste ${min} min.`) : null;
+  }
+  const totalSeg = L.duracion(r) * 60;
+  const dsc = disco(k.color);
+  dsc.el.classList.add('chico');
+  const llevas = h('div', { class: 'crono-num' });
+  const msg = h('small', { class: 'muted' });
+  let sono = false;
+  const tick = () => {
+    const seg = segCrono(k, r);
+    const rest = totalSeg - seg;
+    const c = A.crono(k.id);
+    const corriendo = !!(c && c.inicio && c.rutinaId === r.id);
+    llevas.textContent = mmss(seg);
+    if (rest >= 0) dsc.set(rest, totalSeg);
+    else dsc.set(0, 1, `+${Math.max(1, Math.round(-rest / 60))} min`);
+    msg.textContent = rest <= 0 ? '¡Cumpliste el tiempo! Termina lo que te falta.'
+      : corriendo ? `Quedan ${Math.ceil(rest / 60)} min de ${L.duracion(r)}. Sigue contando aunque vayas a Applicatzo.`
+        : seg > 0 ? 'En pausa.' : `Plan: ${L.duracion(r)} min. Presiona Empezar cuando te sientes a estudiar.`;
+    if (rest <= 0 && corriendo && !sono) { sono = true; chime(2); }
+  };
+  tick();
+  intervalo(tick, 1000);
+  const c = A.crono(k.id);
+  const corriendo = !!(c && c.inicio && c.rutinaId === r.id);
+  const empezado = segCrono(k, r) > 0;
+  return h('div', { class: 'crono', style: { '--kc': k.color } },
+    dsc.el,
+    h('div', { class: 'crono-info' },
+      h('span', { class: 'crono-titulo' }, '⏱️ Cronómetro de estudio'),
+      llevas,
+      msg,
+      h('div', { class: 'fila-botones' },
+        corriendo
+          ? h('button', { class: 'btn sec', onclick: () => { A.pausarCrono(k.id); rerender(); } }, '⏸ Pausa')
+          : h('button', { class: 'btn', style: { background: k.color }, onclick: () => { A.iniciarCrono(k.id, r.id); rerender(); } }, empezado ? '▶ Seguir' : '▶ Empezar'))));
+}
+
+function lineaCrono(k, r) {
+  const el = h('p', { class: 'crono-mini' });
+  const tick = () => {
+    const c = A.crono(k.id);
+    el.textContent = c && c.rutinaId === r.id ? `⏱️ Estudiando: ${mmss(segCrono(k, r))} de ${L.duracion(r)}:00${c.inicio ? '' : ' (pausa)'}` : '';
+  };
+  tick();
+  intervalo(tick, 1000);
+  return el;
 }
 
 // ---------------- Rutina paso a paso ----------------
@@ -280,6 +355,7 @@ export function vistaPasoAPaso(k, r) {
       h('button', { class: 'btn ghost', onclick: () => ir(`#/n/${k.id}/r/${r.id}`) }, '← Lista'),
       h('div', { class: 'puntitos' }, r.pasos.map((x, i) =>
         h('span', { class: `${hechos.has(x.id) ? 'ok' : ''} ${i === idx ? 'actual' : ''}` })))),
+    r.tipo === 'estudio' ? lineaCrono(k, r) : null,
     h('div', { class: 'tarjeta-paso', style: { '--kc': k.color } },
       h('div', { class: 'gigante' }, p.emoji),
       h('h1', { class: 'paso-grande' }, texto),
@@ -294,7 +370,7 @@ export function vistaPasoAPaso(k, r) {
         class: 'btn big ok', onclick: () => {
           const res = A.marcarPaso(k.id, r.id, p.id, { durSeg: (Date.now() - inicio) / 1000 });
           skip.delete(p.id);
-          if (res.nuevo) celebrar(res.estrellas, res.completa ? '¡Rutina completa! +3 ⭐' : '+1 ⭐');
+          if (res.nuevo) celebrar(res.estrellas, textoCelebracion(res));
           rerender();
         },
       }, '✓ ¡Listo!')));

@@ -38,6 +38,7 @@ function migrar(s) {
     if (!Array.isArray(s[k])) s[k] = base[k];
   }
   s.timers = s.timers || {};
+  s.cronos = s.cronos || {};
   s.desbloqueos = s.desbloqueos || {};
   return s;
 }

@@ -179,6 +179,8 @@ function tarjetaNino(k, dia) {
       h('tbody', {},
         h('tr', {}, h('th', {}, 'Rutinas'), meta.sem.map(d => h('td', { class: d.futuro ? 'futuro' : colorPct(d.pct) },
           d.futuro || d.pct == null ? '—' : `${Math.round(d.pct * 100)} %`))),
+        h('tr', {}, h('th', {}, 'Estudio'), meta.sem.map(d => h('td', { class: d.futuro ? 'futuro' : '' },
+          d.futuro || !d.estudio ? '—' : `${d.estudio}′`))),
         h('tr', {}, h('th', {}, 'Pantalla'), meta.sem.map(d => {
           const pres = L.presupuestoPantalla(S, k, d.dia).total;
           return h('td', { class: d.futuro ? 'futuro' : d.pantalla > pres ? 'nada' : '' }, d.futuro ? '—' : `${d.pantalla}′`);
