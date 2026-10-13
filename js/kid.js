@@ -5,6 +5,7 @@ import * as L from './logic.js';
 import { MATERIAS } from './seed.js';
 import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, chime, mmss, DIAS_CORTOS, weekday, addDays } from './util.js';
 import { ir, rerender, intervalo, toast, modal, celebrar, pinPad, disco, barra } from './ui.js';
+import { chat, recorte } from './mensajes.js';
 
 const volver = (k, texto = '← Mi día') =>
   h('button', { class: 'btn ghost volver', onclick: () => ir(`#/n/${k.id}`) }, texto);
@@ -31,7 +32,8 @@ export function vistaInicio() {
   return h('div', { class: 'inicio' },
     h('div', { class: 'inicio-top' },
       h('h1', { class: 'logo' }, '☀️ Rutinapp'),
-      h('button', { class: 'btn ghost', onclick: () => ir('#/adulto') }, '👤 Adultos')),
+      h('button', { class: 'btn ghost', onclick: () => ir(L.noLeidosAdulto(S) ? '#/adulto/mensajes' : '#/adulto') },
+        L.noLeidosAdulto(S) ? `👤 Adultos · 💬 ${L.noLeidosAdulto(S)}` : '👤 Adultos')),
     bannerSiesta(null),
     h('p', { class: 'muted centro grande' }, '¿Quién eres?'),
     h('div', { class: 'perfiles' }, S.ninos.map(k =>
@@ -123,6 +125,7 @@ export function vistaDia(k) {
       h('button', { class: 'pildora', onclick: () => ir(`#/n/${k.id}/premios`), title: 'Meta de la semana' },
         `🏆 ${meta.cumplidos}/${meta.meta} días`)),
     cabeceraNino(k, `Hola, ${k.apodo}`),
+    avisoMensaje(k),
     bannerSiesta(k),
     h('div', { class: 'semana-puntos', 'aria-label': 'Días buenos de la semana' },
       meta.sem.map(d => h('span', {
@@ -150,6 +153,7 @@ export function vistaDia(k) {
       libro ? tile('📖', 'Plan lector', planCorto(libro, dia), () => ir(`#/n/${k.id}/lector`)) : null,
       tile('📅', 'Pruebas', pruebas.length ? `${pruebas.length} próxima${pruebas.length > 1 ? 's' : ''}` : 'Anotar', () => ir(`#/n/${k.id}/pruebas`)),
       tile('⭐', 'Premios y logros', `${L.disponibles(S, k.id)} ⭐ para canjear`, () => ir(`#/n/${k.id}/premios`)),
+      tile('💬', 'Mensajes', L.noLeidos(S, k.id, 'nino').length ? `📩 ${L.noLeidos(S, k.id, 'nino').length} sin leer` : 'Escribir a un adulto', () => ir(`#/n/${k.id}/mensajes`)),
       tile('🧩', 'Menú de juego', 'Ideas sin pantalla', () => ir(`#/n/${k.id}/juego`))));
 }
 
@@ -600,4 +604,21 @@ export function vistaJuego(k) {
       },
     }, '🎲 Elige por mí'),
     grilla);
+}
+
+// ---------------- Mensajes ----------------
+function avisoMensaje(k) {
+  const nl = L.noLeidos(S, k.id, 'nino');
+  if (!nl.length) return null;
+  const ult = nl[nl.length - 1];
+  return h('button', { class: 'aviso mensaje-nuevo', onclick: () => ir(`#/n/${k.id}/mensajes`) },
+    h('strong', {}, `📩 ${nl.length === 1 ? 'Mensaje nuevo' : `${nl.length} mensajes nuevos`} de ${ult.firma || 'un adulto'}`),
+    h('span', {}, `«${recorte(ult.texto)}» · Toca para leer`));
+}
+
+export function vistaMensajes(k) {
+  return h('div', { class: 'mensajes' },
+    volver(k),
+    h('h1', {}, '💬 Mensajes'),
+    chat(k, 'nino'));
 }

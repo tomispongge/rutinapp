@@ -4,8 +4,9 @@ import * as A from './acciones.js';
 import * as kid from './kid.js';
 import * as parent from './parent.js';
 import * as N from './nube.js';
-import { clear, unlockAudio } from './util.js';
-import { setRenderer, limpiar } from './ui.js';
+import { refrescarChats } from './mensajes.js';
+import { clear, unlockAudio, chime } from './util.js';
+import { setRenderer, limpiar, toast } from './ui.js';
 
 const app = document.getElementById('app');
 
@@ -42,6 +43,7 @@ function resolver() {
       case 'pruebas': return kid.vistaPruebas(k);
       case 'premios': return kid.vistaPremios(k);
       case 'juego': return kid.vistaJuego(k);
+      case 'mensajes': return kid.vistaMensajes(k);
       default: return kid.vistaDia(k);
     }
   }
@@ -57,7 +59,7 @@ function render() {
 
 // En formularios (modo adulto, bienvenida, inicio de sesión) no se redibuja solo:
 // se perdería lo que se está escribiendo.
-const enFormulario = () => /^#\/(adulto|configurar|nube)/.test(location.hash);
+const enFormulario = () => /^#\/(adulto|configurar|nube)|\/mensajes$/.test(location.hash);
 
 // Al volver de Applicatzo (u otra app), recoge resultados y refresca las vistas de niños.
 function alVolver() {
@@ -80,7 +82,17 @@ document.addEventListener('pointerdown', unlockAudio);
 render();
 // Sincronización con la nube (si está configurada y hay sesión). Cuando llegan
 // cambios de otro equipo, se redibuja salvo que se esté llenando un formulario.
-N.iniciar(() => { if (!enFormulario()) render(); });
+N.iniciar(nuevos => {
+  const msgs = nuevos.filter(e => e.tipo === 'mensaje');
+  if (msgs.length) {
+    const m = msgs[msgs.length - 1];
+    const k = S.ninos.find(x => x.id === m.ninoId);
+    chime(2);
+    toast(m.de === 'nino' ? `📩 ${k ? k.apodo : 'Un niño'} te escribió` : `📩 Mensaje de ${m.firma || 'un adulto'} para ${k ? k.apodo : ''}`);
+  }
+  refrescarChats();
+  if (!enFormulario()) render();
+});
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* sin modo offline */ });

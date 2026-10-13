@@ -55,7 +55,19 @@ const TRADUCCIONES = [
 ];
 const traducir = msg => (TRADUCCIONES.find(([re]) => re.test(msg)) || [null, msg])[1];
 
-async function api(ruta, { method = 'GET', body, auth = true, prefer } = {}) {
+async function api(ruta, opciones = {}) {
+  try {
+    return await llamar(ruta, opciones);
+  } catch (e) {
+    // Token rechazado antes de su vencimiento (p. ej. revocado): se renueva y se reintenta una vez.
+    if (e.status !== 401 || opciones.auth === false || !sesion) throw e;
+    sesion.expires_at = 0;
+    await asegurarToken();
+    return llamar(ruta, opciones);
+  }
+}
+
+async function llamar(ruta, { method = 'GET', body, auth = true, prefer } = {}) {
   const headers = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };
   if (prefer) headers.Prefer = prefer;
   if (auth) {
@@ -169,7 +181,8 @@ export async function borrarDatosNube() {
 // equipos limpian los suyos al ver ajustes.progresoDesde).
 export async function borrarEventosNube() {
   if (!sesion || !sesion.familia_id) return;
-  await api(`/rest/v1/eventos?familia_id=eq.${sesion.familia_id}`, { method: 'DELETE' });
+  // Los mensajes se conservan: solo se borra el progreso.
+  await api(`/rest/v1/eventos?familia_id=eq.${sesion.familia_id}&data-%3E%3Etipo=neq.mensaje`, { method: 'DELETE' });
   meta.cursor = null;
   escribir(K_META, meta);
 }
@@ -234,19 +247,23 @@ function aplicar(doc) {
     S[k] = k === 'ajustes' ? { ...S.ajustes, ...doc.ajustes } : copia(doc[k]);
   }
   const desde = S.ajustes.progresoDesde || 0;
-  if (desde) S.eventos = S.eventos.filter(e => (e.ts || 0) >= desde);
+  if (desde) S.eventos = S.eventos.filter(e => e.tipo === 'mensaje' || (e.ts || 0) >= desde);
 }
 
 const version = e => e.u || e.ts || 0;
 const sinMarca = e => { const { _s, ...resto } = e; return resto; };
 
 // ---------------- Sincronizar ----------------
+// Cada revisión es liviana: pregunta solo lo nuevo (eventos desde el cursor y la
+// fecha de la configuración) y descarga la configuración completa solo si cambió.
 export function sincronizar() {
   if (!configurada() || !sesion) return Promise.resolve(false);
   if (enCurso) { otraVez = true; return enCurso; }
   enCurso = (async () => {
     avisar();
+    const nuevos = [];
     let cambio = false;
+    let tocado = false;
     try {
       if (!sesion.familia_id) await prepararFamilia();
       const fid = sesion.familia_id;
@@ -260,6 +277,7 @@ export function sincronizar() {
           body: lote.map(e => ({ familia_id: fid, id: String(e.id), data: sinMarca(e) })),
         });
         for (const e of lote) e._s = version(e);
+        tocado = true;
       }
 
       // 2) Bajar eventos de otros equipos (2 min de margen; los repetidos se ignoran).
@@ -273,25 +291,32 @@ export function sincronizar() {
         for (const f of filas) {
           meta.cursor = f.recibido;
           const r = f.data;
-          if (!r || typeof r !== 'object' || !r.id || (r.ts || 0) < progresoDesde) continue;
+          if (!r || typeof r !== 'object' || !r.id) continue;
+          if (r.tipo !== 'mensaje' && (r.ts || 0) < progresoDesde) continue;
           const i = indice.get(r.id);
           if (i === undefined) {
             indice.set(r.id, S.eventos.push({ ...r, _s: version(r) }) - 1);
+            nuevos.push(r);
             cambio = true;
           } else if (version(r) > version(S.eventos[i])) {
             S.eventos[i] = { ...r, _s: version(r) };
             cambio = true;
-          } else if (version(r) === version(S.eventos[i])) {
+          } else if (version(r) === version(S.eventos[i]) && S.eventos[i]._s !== version(r)) {
             S.eventos[i]._s = version(r);
+            tocado = true;
           }
         }
         if (filas.length < 1000) break;
       }
 
-      // 3) Configuración.
-      const filas = await api(`/rest/v1/estado?familia_id=eq.${fid}&select=doc,actualizado`);
-      const remoto = filas[0] ? filas[0].doc : null;
+      // 3) Configuración: primero solo la fecha; el documento, si cambió.
+      const cab = await api(`/rest/v1/estado?familia_id=eq.${fid}&select=actualizado`);
+      const remotoAct = cab[0] ? cab[0].actualizado : null;
       const local = instantanea();
+      let remoto = null;
+      if (remotoAct && meta.base && remotoAct === meta.estadoAct) remoto = meta.base; // la nube no cambió
+      else if (remotoAct) remoto = (await api(`/rest/v1/estado?familia_id=eq.${fid}&select=doc`))[0].doc;
+
       let final;
       if (!remoto) final = local; // primera vez de la familia: sube lo de este equipo
       else if (!meta.base) final = copia(remoto); // equipo nuevo: manda la nube
@@ -302,10 +327,13 @@ export function sincronizar() {
         cambio = true;
       }
       if (!remoto || !igual(final, remoto)) {
-        await api('/rest/v1/estado', {
-          method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+        const r = await api('/rest/v1/estado?select=actualizado', {
+          method: 'POST', prefer: 'resolution=merge-duplicates,return=representation',
           body: { familia_id: fid, doc: final },
         });
+        meta.estadoAct = r && r[0] ? r[0].actualizado : null;
+      } else {
+        meta.estadoAct = remotoAct;
       }
       meta.base = final;
       meta.ultima = Date.now();
@@ -314,30 +342,31 @@ export function sincronizar() {
       meta.error = e.message || 'Error al sincronizar';
     } finally {
       escribir(K_META, meta);
-      guardar({ silencioso: true });
+      if (cambio || tocado) guardar({ silencioso: true });
       enCurso = null;
       avisar();
     }
-    if (cambio) alCambiosRemotos();
-    if (otraVez) { otraVez = false; programar(500); }
+    if (cambio) alCambiosRemotos(nuevos);
+    if (otraVez) { otraVez = false; programar(300); }
     return cambio;
   })();
   return enCurso;
 }
 
-function programar(ms = 2500) {
+export function programar(ms = 1000) {
   clearTimeout(temporizador);
   temporizador = setTimeout(() => { sincronizar(); }, ms);
 }
 
 // Arranca la sincronización automática: al abrir, al volver a la app, cada
-// minuto con la app visible y unos segundos después de cada cambio.
+// 10 segundos con la app visible y 1 segundo después de cada cambio.
+const CADA_MS = 10000;
 export function iniciar(onCambiosRemotos) {
   alCambiosRemotos = onCambiosRemotos || (() => {});
   if (!configurada()) return;
   alGuardar(() => { if (sesion) programar(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizar(); });
   window.addEventListener('online', () => sincronizar());
-  setInterval(() => { if (!document.hidden) sincronizar(); }, 60000);
+  setInterval(() => { if (!document.hidden) sincronizar(); }, CADA_MS);
   sincronizar();
 }

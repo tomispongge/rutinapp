@@ -228,6 +228,15 @@ export function estudioPendiente(S, k, dia) {
   return p.completa ? null : { rutina: est.r, ...p };
 }
 
+// ---------------- Mensajes ----------------
+// Cada niño tiene una conversación con los adultos. de: 'nino' | 'adulto'.
+export function mensajes(S, ninoId) {
+  return S.eventos.filter(e => !e.anulado && e.tipo === 'mensaje' && e.ninoId === ninoId).sort((a, b) => a.ts - b.ts);
+}
+// Los que "lector" ('nino' | 'adulto') todavía no ha visto: los que escribió el otro lado.
+export const noLeidos = (S, ninoId, lector) => mensajes(S, ninoId).filter(m => m.de !== lector && !m.leido);
+export const noLeidosAdulto = S => S.ninos.reduce((a, k) => a + noLeidos(S, k.id, 'adulto').length, 0);
+
 // ---------------- Estrellas, meta semanal y logros ----------------
 export function estrellas(S, ninoId) {
   return S.eventos.reduce((a, e) => a + (!e.anulado && e.ninoId === ninoId ? (e.estrellas || 0) : 0), 0);

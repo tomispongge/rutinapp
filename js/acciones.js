@@ -289,6 +289,40 @@ export function borrarPrueba(id) {
   guardar();
 }
 
+// ---------------- Mensajes ----------------
+export function enviarMensaje(ninoId, de, texto, firma) {
+  const t = String(texto || '').trim().slice(0, 500);
+  if (!t) return null;
+  const ev = { tipo: 'mensaje', ninoId, de, texto: t, leido: false };
+  if (firma) ev.firma = String(firma).trim().slice(0, 30);
+  const e = push(ev);
+  guardar();
+  return e;
+}
+
+// Marca como vistos los mensajes que escribió el otro lado.
+export function marcarLeidos(ninoId, lector) {
+  const now = Date.now();
+  let n = 0;
+  for (const e of S.eventos) {
+    if (!e.anulado && e.tipo === 'mensaje' && e.ninoId === ninoId && e.de !== lector && !e.leido) {
+      e.leido = true;
+      e.u = now;
+      n++;
+    }
+  }
+  if (n) guardar();
+  return n;
+}
+
+export function borrarMensaje(id) {
+  const e = S.eventos.find(x => x.id === id);
+  if (!e) return;
+  e.anulado = true;
+  e.u = Date.now();
+  guardar();
+}
+
 // ---------------- Premios ----------------
 export function pedirCanje(ninoId, premioId) {
   const p = S.premios.find(x => x.id === premioId);

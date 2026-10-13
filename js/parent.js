@@ -3,6 +3,7 @@ import { S, guardar, exportar, importar, borrarTodo, borrarProgreso } from './st
 import * as A from './acciones.js';
 import * as L from './logic.js';
 import * as N from './nube.js';
+import { chat, firma, pedirFirma } from './mensajes.js';
 import { AVATARES, MATERIAS, TIPOS_RUTINA, ACCIONES } from './seed.js';
 import { h, uuid, dayKey, addDays, fechaCorta, horasMin, fromMin, nowMin, DIAS, DIAS_CORTOS, SEMANA, weekday } from './util.js';
 import { ir, rerender, toast, modal, pinPad, alLimpiar, intervalo } from './ui.js';
@@ -88,6 +89,7 @@ export function vistaConfigurar() {
 // ---------------- Modo adulto ----------------
 const TABS = [
   ['resumen', '📊 Resumen'],
+  ['mensajes', '💬 Mensajes'],
   ['rutinas', '🗓️ Rutinas'],
   ['talleres', '🏐 Talleres'],
   ['premios', '⭐ Premios'],
@@ -107,15 +109,18 @@ export function vistaAdulto(tab = 'resumen', arg) {
     return h('div', { class: 'centro pad' }, h('p', { class: 'muted' }, '🔒 Modo adulto'));
   }
   A.activarAdulto(); // renueva los 15 minutos con cada vista
-  const vistas = { resumen, rutinas, talleres, premios, lectura, ajustes, nube };
+  const vistas = { resumen, mensajes, rutinas, talleres, premios, lectura, ajustes, nube };
+  // La vista va primero: abrir un chat marca mensajes como leídos y el contador de la pestaña debe verlo.
+  const cuerpo = (vistas[tab] || resumen)(arg);
   return h('div', { class: 'adulto' },
     h('div', { class: 'fila-top' },
       h('button', { class: 'btn ghost', onclick: () => { A.cerrarAdulto(); ir('#/'); } }, '← Salir'),
       h('h1', {}, '👤 Modo adulto'),
       botonSiesta()),
     h('nav', { class: 'tabs' }, TABS.map(([id, t]) =>
-      h('button', { class: `tab ${id === tab ? 'on' : ''}`, onclick: () => ir(`#/adulto/${id}`) }, t))),
-    (vistas[tab] || resumen)(arg));
+      h('button', { class: `tab ${id === tab ? 'on' : ''}`, onclick: () => ir(`#/adulto/${id}`) },
+        id === 'mensajes' && L.noLeidosAdulto(S) ? `${t} (${L.noLeidosAdulto(S)})` : t))),
+    cuerpo);
 }
 
 function botonSiesta() {
@@ -675,7 +680,7 @@ function nube() {
   const url = location.origin + location.pathname;
   return h('div', {},
     card('☁️ Sincronización',
-      h('p', {}, `Conectado como ${est.email}. Los cambios se suben solos unos segundos después, y cada minuto se revisa si hay novedades de otros equipos.`),
+      h('p', {}, `Conectado como ${est.email}. Los cambios se suben solos al instante y cada 10 segundos se revisa si hay novedades de otros equipos (con la app abierta).`),
       estadoTxt,
       h('div', { class: 'fila-botones izq' },
         h('button', { class: 'btn', onclick: () => N.sincronizar() }, '🔄 Sincronizar ahora'),
@@ -717,4 +722,21 @@ export function vistaCorreo({ error }) {
     h('p', {}, error ? `${error}. Intenta crear la cuenta de nuevo para recibir otro correo.`
       : 'Vuelve a Rutinapp (desde su ícono en la pantalla de inicio) y presiona «Entrar» con tu correo y contraseña.'),
     h('button', { class: 'btn', onclick: () => ir('#/') }, 'Continuar'));
+}
+
+// ---------------- Mensajes ----------------
+function mensajes(ninoId) {
+  const k = L.nino(S, ninoId)
+    || S.ninos.find(x => L.noLeidos(S, x.id, 'adulto').length)
+    || S.ninos[0];
+  return h('div', {},
+    h('div', { class: 'fila-checks' }, S.ninos.map(x => {
+      const n = L.noLeidos(S, x.id, 'adulto').length;
+      return h('button', {
+        class: `tab ${x.id === k.id ? 'on' : ''}`, onclick: () => ir(`#/adulto/mensajes/${x.id}`),
+      }, `${x.avatar} ${x.apodo}${n ? ` · ${n} nuevo${n > 1 ? 's' : ''}` : ''}`);
+    })),
+    h('p', { class: 'muted chico' }, firma() ? `Firmas como «${firma()}» · ` : 'Aún no eliges cómo firmar · ',
+      h('button', { class: 'enlace', onclick: () => pedirFirma(() => rerender()) }, 'cambiar')),
+    chat(k, 'adulto'));
 }

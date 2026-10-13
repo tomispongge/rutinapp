@@ -68,7 +68,8 @@ export function importar(texto) {
 // cronómetros y desbloqueos, pero conserva apodos, PIN, rutinas, talleres,
 // premios, libros (vuelven a su página inicial) y pruebas anotadas.
 export function borrarProgreso(hoy) {
-  S.eventos = [];
+  // Los mensajes no son progreso: se conservan.
+  S.eventos = S.eventos.filter(e => e.tipo === 'mensaje');
   // Los otros equipos sincronizados borran sus eventos anteriores a esta marca.
   S.ajustes.progresoDesde = Date.now();
   S.timers = {};
