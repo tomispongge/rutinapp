@@ -2,9 +2,10 @@
 import { S, guardar, exportar, importar, borrarTodo, borrarProgreso } from './store.js';
 import * as A from './acciones.js';
 import * as L from './logic.js';
+import * as N from './nube.js';
 import { AVATARES, MATERIAS, TIPOS_RUTINA, ACCIONES } from './seed.js';
 import { h, uuid, dayKey, addDays, fechaCorta, horasMin, fromMin, nowMin, DIAS, DIAS_CORTOS, SEMANA, weekday } from './util.js';
-import { ir, rerender, toast, modal, pinPad } from './ui.js';
+import { ir, rerender, toast, modal, pinPad, alLimpiar, intervalo } from './ui.js';
 
 // ---------- Ayudantes de formulario ----------
 const card = (titulo, ...hijos) => h('section', { class: 'card' }, titulo ? h('h2', {}, titulo) : null, ...hijos);
@@ -47,6 +48,9 @@ export function vistaConfigurar() {
 
   return h('div', { class: 'configurar' },
     h('h1', { class: 'logo' }, '☀️ Bienvenido a Rutinapp'),
+    N.configurada() ? card('☁️ ¿Ya usas Rutinapp en otro equipo?',
+      h('p', { class: 'muted' }, 'Inicia sesión con la cuenta de la familia para traer apodos, rutinas, talleres y el avance. Si es tu primer equipo, completa esta bienvenida.'),
+      h('button', { class: 'btn sec', onclick: () => ir('#/nube') }, 'Iniciar sesión')) : null,
     h('p', { class: 'aviso' }, `🔒 ${AVISO_PRIVACIDAD}`),
     borrador.map(b => card(`${b.k.curso}º básico`,
       campo('Apodo', inp({ value: b.apodo, maxlength: 20, placeholder: 'Cómo le dicen en casa' }, v => { b.apodo = v.trim(); })),
@@ -89,6 +93,7 @@ const TABS = [
   ['premios', '⭐ Premios'],
   ['lectura', '📖 Lectura y pruebas'],
   ['ajustes', '⚙️ Ajustes'],
+  ['nube', '☁️ Nube'],
 ];
 
 export function vistaAdulto(tab = 'resumen', arg) {
@@ -102,7 +107,7 @@ export function vistaAdulto(tab = 'resumen', arg) {
     return h('div', { class: 'centro pad' }, h('p', { class: 'muted' }, '🔒 Modo adulto'));
   }
   A.activarAdulto(); // renueva los 15 minutos con cada vista
-  const vistas = { resumen, rutinas, talleres, premios, lectura, ajustes };
+  const vistas = { resumen, rutinas, talleres, premios, lectura, ajustes, nube };
   return h('div', { class: 'adulto' },
     h('div', { class: 'fila-top' },
       h('button', { class: 'btn ghost', onclick: () => { A.cerrarAdulto(); ir('#/'); } }, '← Salir'),
@@ -551,7 +556,12 @@ function ajustes() {
           titulo: '¿Borrar el progreso?',
           cuerpo: h('p', {}, 'Las estrellas y el historial vuelven a cero. La configuración se mantiene. Si quieres, descarga antes un respaldo.'),
           acciones: [
-            { texto: 'Sí, borrar progreso', clase: 'bad', onClick: () => { borrarProgreso(dayKey()); toast('Progreso borrado: todos parten de cero'); rerender(); } },
+            { texto: 'Sí, borrar progreso', clase: 'bad', onClick: () => {
+              borrarProgreso(dayKey());
+              N.borrarEventosNube().catch(() => { /* los otros equipos igual filtran por fecha */ });
+              toast('Progreso borrado: todos parten de cero');
+              rerender();
+            } },
             { texto: 'Cancelar', clase: 'ghost' },
           ],
         }),
@@ -564,9 +574,147 @@ function ajustes() {
           titulo: '¿Borrar todos los datos?',
           cuerpo: h('p', {}, 'Se borran rutinas, estrellas, historial y ajustes de este dispositivo. No se puede deshacer (salvo con un respaldo).'),
           acciones: [
-            { texto: 'Sí, borrar todo', clase: 'bad', onClick: () => { borrarTodo(); A.cerrarAdulto(); ir('#/configurar'); } },
+            { texto: 'Sí, borrar todo', clase: 'bad', onClick: async () => {
+              // Primero se cierra la sesión: si no, la configuración vacía se subiría a la nube.
+              if (N.estado().conectado) await N.salir();
+              borrarTodo();
+              A.cerrarAdulto();
+              ir('#/configurar');
+            } },
             { texto: 'Cancelar', clase: 'ghost' },
           ],
         }),
       }, 'Borrar todos los datos')));
+}
+
+// ---------------- Nube (sincronización) ----------------
+function haceCuanto(ts) {
+  const seg = (Date.now() - ts) / 1000;
+  if (seg < 60) return 'hace un momento';
+  if (seg < 3600) return `hace ${Math.floor(seg / 60)} min`;
+  return `a las ${fromMin(nowMin(new Date(ts)))}`;
+}
+
+function formularioCuenta(alListo) {
+  let email = '';
+  let clave = '';
+  const msg = h('p', { class: 'muted', role: 'status' });
+  const botones = [];
+  const ocupado = (on, texto = '') => { botones.forEach(b => { b.disabled = on; }); msg.textContent = texto; };
+  const entrar = h('button', {
+    class: 'btn', onclick: async () => {
+      if (!email || !clave) { msg.textContent = 'Escribe tu correo y tu contraseña.'; return; }
+      ocupado(true, 'Entrando y sincronizando…');
+      try {
+        await N.entrar(email, clave);
+        ocupado(false);
+        alListo();
+      } catch (e) { ocupado(false, `⚠️ ${e.message}`); }
+    },
+  }, 'Entrar');
+  const crear = h('button', {
+    class: 'btn sec', onclick: async () => {
+      if (!email || clave.length < 6) { msg.textContent = 'Escribe tu correo y una contraseña de al menos 6 caracteres.'; return; }
+      ocupado(true, 'Creando la cuenta…');
+      try {
+        const r = await N.registrar(email, clave);
+        if (r.confirmar) ocupado(false, '📧 Te enviamos un correo para confirmar la cuenta. Ábrelo y confirma; después vuelve aquí y presiona «Entrar».');
+        else { ocupado(false); alListo(); }
+      } catch (e) { ocupado(false, `⚠️ ${e.message}`); }
+    },
+  }, 'Crear cuenta');
+  botones.push(entrar, crear);
+  return h('div', {},
+    campo('Correo', inp({ type: 'email', autocomplete: 'username', inputmode: 'email', autocapitalize: 'off', spellcheck: 'false' }, v => { email = v.trim(); })),
+    campo('Contraseña', inp({ type: 'password', autocomplete: 'current-password' }, v => { clave = v; }),
+      'Mínimo 6 caracteres. Usa la misma cuenta en todos los equipos de la familia.'),
+    h('div', { class: 'fila-botones izq' }, entrar, crear),
+    msg);
+}
+
+function tarjetaDatosNube(conectado) {
+  return card('🛡️ Qué se guarda en la nube',
+    h('p', {}, 'Apodos, rutinas, talleres, premios, libros, pruebas y el registro de la app (pasos, minutos de pantalla y estudio, guías, canjes). Nada de apellidos, RUT, fechas de nacimiento ni diagnósticos. Cada familia solo puede ver sus propios datos.'),
+    conectado ? h('button', {
+      class: 'btn bad', onclick: () => modal({
+        titulo: '¿Borrar los datos de la nube?',
+        cuerpo: h('p', {}, 'Se borran la configuración y el registro de tu familia en la nube y se cierra la sesión. Lo guardado en este dispositivo se mantiene. Para eliminar también la cuenta, hazlo desde el panel de Supabase.'),
+        acciones: [
+          {
+            texto: 'Sí, borrar de la nube', clase: 'bad', onClick: async () => {
+              try { await N.borrarDatosNube(); toast('Datos de la nube borrados'); } catch (e) { toast(e.message); }
+              rerender();
+            },
+          },
+          { texto: 'Cancelar', clase: 'ghost' },
+        ],
+      }),
+    }, 'Borrar datos de la nube') : null);
+}
+
+function nube() {
+  const est = N.estado();
+  if (!est.configurada) {
+    return card('☁️ Sincronización', h('p', {}, 'La sincronización todavía no está configurada en esta versión de la app.'));
+  }
+  if (!est.conectado) {
+    return h('div', {},
+      card('☁️ Sincronizar entre equipos',
+        h('p', {}, 'Con una cuenta de adulto ves el avance desde tu teléfono o PC, y los datos quedan respaldados. Crea la cuenta una vez y usa la misma en todos los equipos.'),
+        formularioCuenta(() => { toast('Conectado'); rerender(); })),
+      tarjetaDatosNube(false));
+  }
+  const estadoTxt = h('p', { role: 'status' });
+  const pintarEstado = e => {
+    estadoTxt.textContent = e.sincronizando ? '🔄 Sincronizando…'
+      : e.error ? `⚠️ ${e.error}` : e.ultima ? `✅ Sincronizado ${haceCuanto(e.ultima)}.` : 'Todavía no se sincroniza.';
+  };
+  pintarEstado(est);
+  alLimpiar(N.alCambiar(pintarEstado));
+  intervalo(() => pintarEstado(N.estado()), 15000);
+  const url = location.origin + location.pathname;
+  return h('div', {},
+    card('☁️ Sincronización',
+      h('p', {}, `Conectado como ${est.email}. Los cambios se suben solos unos segundos después, y cada minuto se revisa si hay novedades de otros equipos.`),
+      estadoTxt,
+      h('div', { class: 'fila-botones izq' },
+        h('button', { class: 'btn', onclick: () => N.sincronizar() }, '🔄 Sincronizar ahora'),
+        h('button', {
+          class: 'btn ghost', onclick: () => modal({
+            titulo: '¿Cerrar sesión en este equipo?',
+            cuerpo: h('p', {}, 'Este equipo deja de sincronizar. Lo guardado aquí se mantiene.'),
+            acciones: [
+              { texto: 'Cerrar sesión', clase: 'bad', onClick: async () => { await N.salir(); rerender(); } },
+              { texto: 'Cancelar', clase: 'ghost' },
+            ],
+          }),
+        }, 'Cerrar sesión'))),
+    card('📱 Agregar otro equipo (tu teléfono o PC)',
+      h('ol', { class: 'lista-pasos' },
+        h('li', {}, `Abre ${url}`),
+        h('li', {}, 'En el teléfono: Compartir → «Agregar a pantalla de inicio».'),
+        h('li', {}, 'En la bienvenida toca «Iniciar sesión» y entra con esta misma cuenta. Se traen apodos, PIN, rutinas, talleres y todo el avance.'))),
+    tarjetaDatosNube(true));
+}
+
+// Equipo nuevo (sin configurar): iniciar sesión trae los datos de la familia.
+export function vistaNubeInicio() {
+  return h('div', { class: 'configurar' },
+    h('button', { class: 'btn ghost volver', onclick: () => ir('#/configurar') }, '← Volver'),
+    h('h1', {}, '☁️ Iniciar sesión'),
+    h('p', { class: 'muted' }, 'Entra con la cuenta de adulto de tu familia para traer apodos, PIN, rutinas, talleres y el avance a este equipo.'),
+    card(null, formularioCuenta(() => {
+      if (S.ajustes.configurado) { toast('¡Listo! Se cargaron los datos de la familia.'); ir('#/'); }
+      else { toast('Conectado. Completa la bienvenida: quedará guardada en la nube.'); ir('#/configurar'); }
+    })));
+}
+
+// Página a la que llega el enlace de confirmación del correo (se abre en Safari).
+export function vistaCorreo({ error }) {
+  return h('div', { class: 'configurar centro pad' },
+    h('div', { class: 'gigante' }, error ? '⚠️' : '✅'),
+    h('h1', {}, error ? 'No se pudo confirmar el correo' : 'Correo confirmado'),
+    h('p', {}, error ? `${error}. Intenta crear la cuenta de nuevo para recibir otro correo.`
+      : 'Vuelve a Rutinapp (desde su ícono en la pantalla de inicio) y presiona «Entrar» con tu correo y contraseña.'),
+    h('button', { class: 'btn', onclick: () => ir('#/') }, 'Continuar'));
 }

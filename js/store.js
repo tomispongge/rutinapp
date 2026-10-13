@@ -20,7 +20,12 @@ export function cargar() {
   return S;
 }
 
-export function guardar() {
+// La sincronización se suscribe aquí para subir cambios unos segundos después.
+let oyenteGuardar = null;
+export function alGuardar(fn) { oyenteGuardar = fn; }
+
+// { silencioso: true } lo usa la propia sincronización, para no dispararse a sí misma.
+export function guardar({ silencioso = false } = {}) {
   S.actualizado = Date.now();
   try {
     localStorage.setItem(KEY, JSON.stringify(S));
@@ -28,6 +33,7 @@ export function guardar() {
     // Sin datos personales en la consola: solo el tipo de error.
     console.warn('Rutinapp: no se pudo guardar', e && e.name);
   }
+  if (!silencioso && oyenteGuardar) oyenteGuardar();
 }
 
 function migrar(s) {
@@ -52,6 +58,8 @@ export function importar(texto) {
   if (!s || !Array.isArray(s.ninos) || !Array.isArray(s.eventos) || !Array.isArray(s.rutinas)) {
     throw new Error('El archivo no es un respaldo de Rutinapp');
   }
+  // Marcas de sincronización fuera: lo restaurado se vuelve a subir completo.
+  for (const e of s.eventos) delete e._s;
   S = migrar(s);
   guardar();
 }
@@ -61,6 +69,8 @@ export function importar(texto) {
 // premios, libros (vuelven a su página inicial) y pruebas anotadas.
 export function borrarProgreso(hoy) {
   S.eventos = [];
+  // Los otros equipos sincronizados borran sus eventos anteriores a esta marca.
+  S.ajustes.progresoDesde = Date.now();
   S.timers = {};
   S.cronos = {};
   S.desbloqueos = {};

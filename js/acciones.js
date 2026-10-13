@@ -9,6 +9,16 @@ function push(ev) {
   return e;
 }
 
+// Eventos que solo pueden existir una vez (un paso de un día, el estado de un
+// taller…) usan un id fijo: si se marcan en dos equipos, al sincronizar quedan
+// como uno solo y las estrellas no se cuentan doble. Si estaba anulado, revive.
+function fijo(id, datos) {
+  const e = S.eventos.find(x => x.id === id);
+  if (!e) return push({ id, ...datos });
+  Object.assign(e, datos, { anulado: false, u: Date.now() });
+  return e;
+}
+
 // ---------------- Pasos y rutinas ----------------
 // Cada paso vale 1 ⭐; completar la rutina suma 2 ⭐ más.
 export function marcarPaso(ninoId, rutinaId, pasoId, extra = {}) {
@@ -17,12 +27,12 @@ export function marcarPaso(ninoId, rutinaId, pasoId, extra = {}) {
   const ev = { tipo: 'paso', ninoId, rutinaId, pasoId, dia, estrellas: 1 };
   if (extra.durSeg) ev.durSeg = Math.round(extra.durSeg);
   if (extra.ts) ev.ts = extra.ts;
-  push(ev);
+  fijo(`paso:${ninoId}:${rutinaId}:${pasoId}:${dia}`, ev);
   let bonus = 0;
   let minutosEstudio = null;
   const r = S.rutinas.find(x => x.id === rutinaId);
   if (r && L.progresoRutina(S, ninoId, r, dia).completa && !L.eventoRutina(S, ninoId, rutinaId, dia)) {
-    push({ tipo: 'rutina', ninoId, rutinaId, dia, estrellas: 2 });
+    fijo(`rutina:${ninoId}:${rutinaId}:${dia}`, { tipo: 'rutina', ninoId, rutinaId, dia, estrellas: 2 });
     bonus = 2;
     // Al completar el estudio, el cronómetro se detiene y guarda los minutos.
     const c = S.cronos[ninoId];
@@ -109,7 +119,7 @@ export function marcarActividad(ninoId, actividadId, estado) {
       e.u = Date.now();
     }
   }
-  if (estado) push({ tipo: 'actividad', ninoId, actividadId, estado });
+  if (estado) fijo(`actividad:${ninoId}:${actividadId}:${dia}`, { tipo: 'actividad', ninoId, actividadId, dia, estado });
   const agregadas = aplicarPlanB(ninoId, dia);
   guardar();
   return agregadas;
@@ -146,20 +156,20 @@ function aplicarPlanB(ninoId, dia) {
       .sort((a, b) => (a.hora || '99').localeCompare(b.hora || '99'));
     const colegio = candidatas.find(r => /colegio/i.test(r.nombre)) || candidatas[0];
     if (colegio) {
-      push({ tipo: 'extra', ninoId, rutinaId: colegio.id, dia, hora: colegio.hora || '13:30', origen: 'planB' });
+      fijo(`planb-extra:${ninoId}:${colegio.id}:${dia}`, { tipo: 'extra', ninoId, rutinaId: colegio.id, dia, hora: colegio.hora || '13:30', origen: 'planB' });
       agregadas.push(colegio.nombre);
     }
   }
   const llegadasTaller = hoy.filter(x => x.r.tipo === 'llegada' && x.hora && toMin(x.hora) >= inicioTalleres);
   const ultimoQueFue = [...acts].reverse().find(a => !susp.includes(a));
   if (!ultimoQueFue) {
-    for (const x of llegadasTaller) push({ tipo: 'omitir', ninoId, rutinaId: x.r.id, dia, origen: 'planB' });
+    for (const x of llegadasTaller) fijo(`planb-omitir:${ninoId}:${x.r.id}:${dia}`, { tipo: 'omitir', ninoId, rutinaId: x.r.id, dia, origen: 'planB' });
   } else if (susp.includes(acts[acts.length - 1])) {
     // Fue a los primeros talleres pero se suspendieron los últimos: llega antes.
     for (const x of llegadasTaller) {
       if (toMin(x.hora) > toMin(ultimoQueFue.hasta)) {
-        push({ tipo: 'omitir', ninoId, rutinaId: x.r.id, dia, origen: 'planB' });
-        push({ tipo: 'extra', ninoId, rutinaId: x.r.id, dia, hora: ultimoQueFue.hasta, origen: 'planB' });
+        fijo(`planb-omitir:${ninoId}:${x.r.id}:${dia}`, { tipo: 'omitir', ninoId, rutinaId: x.r.id, dia, origen: 'planB' });
+        fijo(`planb-extra:${ninoId}:${x.r.id}:${dia}`, { tipo: 'extra', ninoId, rutinaId: x.r.id, dia, hora: ultimoQueFue.hasta, origen: 'planB' });
       }
     }
   }
@@ -167,7 +177,7 @@ function aplicarPlanB(ninoId, dia) {
     const estudio = S.rutinas.find(r => r.tipo === 'estudio' && r.ninos.includes(ninoId));
     if (estudio) {
       const hora = primeraSuspendida ? (estudio.hora || primera.desde) : susp[0].desde;
-      push({ tipo: 'extra', ninoId, rutinaId: estudio.id, dia, hora, origen: 'planB' });
+      fijo(`planb-extra:${ninoId}:${estudio.id}:${dia}`, { tipo: 'extra', ninoId, rutinaId: estudio.id, dia, hora, origen: 'planB' });
       agregadas.push(estudio.nombre);
     }
   }
@@ -178,7 +188,7 @@ export function agregarRutinaHoy(ninoId, rutinaId, hora) {
   const dia = dayKey();
   const ya = S.eventos.some(e => !e.anulado && e.tipo === 'extra' && e.ninoId === ninoId && e.rutinaId === rutinaId && e.dia === dia);
   if (ya) return;
-  push({ tipo: 'extra', ninoId, rutinaId, hora: hora || fromMin(Math.ceil(nowMin() / 5) * 5) });
+  fijo(`extra:${ninoId}:${rutinaId}:${dia}`, { tipo: 'extra', ninoId, rutinaId, dia, hora: hora || fromMin(Math.ceil(nowMin() / 5) * 5) });
   guardar();
 }
 

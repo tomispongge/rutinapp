@@ -364,3 +364,7 @@ textarea.input { min-height: 140px; }
 /* Estudio que ya debía hacerse y sigue pendiente */
 .item.atrasado { box-shadow: inset 6px 0 0 var(--medio), var(--sombra); }
 .item.atrasado small { color: var(--medio); font-weight: 700; }
+
+/* Lista numerada en tarjetas */
+.lista-pasos { padding-left: 22px; margin: 6px 0; }
+.lista-pasos li { margin: 6px 0; }

@@ -81,14 +81,28 @@ Si Applicatzo se abre solo, sin pasar por Rutinapp, el puente no hace nada.
 - Solo se guardan apodo, curso, avatar y la actividad dentro de la app. Rutinapp no necesita apellidos, RUT, fechas de nacimiento ni diagnósticos.
 - Los identificadores son opacos (UUID), también en las URL.
 - El código es público (GitHub Pages). Los datos reales (apodos, talleres, libros, progreso) **no** están en el código: se ingresan en la app (los talleres, en Modo adulto → Talleres) y quedan en el dispositivo.
-- **Fase actual**: todo queda en el dispositivo (`localStorage`). No se envía nada a internet.
+- Sin cuenta, todo queda en el dispositivo (`localStorage`). Con cuenta, se sincroniza con Supabase y las reglas RLS hacen que cada familia vea solo sus datos. Desde *Modo adulto → ☁️ Nube* se pueden borrar los datos de la nube.
 - El PIN es un candado para niños, no una medida de seguridad.
+
+## Sincronización con Supabase
+
+Con una cuenta de adulto, el avance se ve en el iPad, el teléfono y el PC.
+
+- **Cómo funciona.** Los eventos (pasos, minutos, guías, canjes) se unen por id. Los pasos usan un id fijo, así que marcar el mismo paso en dos equipos cuenta una sola vez. La configuración se mezcla en 3 vías por sección y por elemento, así que los cambios hechos en equipos distintos se combinan. Los cronómetros en curso quedan solo en el equipo donde corren.
+- **Sin internet** la app funciona igual y sincroniza al volver la conexión.
+- **Configuración** (una vez):
+  1. Crear un proyecto en [supabase.com](https://supabase.com), región *South America (São Paulo)*.
+  2. *SQL Editor* → pegar [`supabase/schema.sql`](supabase/schema.sql) → *Run*.
+  3. *Authentication → URL Configuration*: en *Site URL* poner `https://tomispongge.github.io/rutinapp/`.
+  4. *Project Settings → API Keys*: copiar la **URL del proyecto** y la **publishable key** (o *anon key*) en [`js/config.js`](js/config.js). **Nunca** pongas ahí la *secret* o *service_role key*.
+  5. En la app: *Modo adulto → ☁️ Nube → Crear cuenta*. En los otros equipos: *Bienvenida → Iniciar sesión*.
+- El proyecto gratuito de Supabase se pausa tras 7 días sin uso. Si pasa, la app sigue funcionando sola y basta con reactivarlo desde el panel.
 
 ## Próximos pasos
 
-1. **Sincronización en la nube**, para ver los avances desde el PC o el teléfono. Opción propuesta: Supabase en su plan gratuito, con región São Paulo y un solo login de adulto. Los eventos ya están diseñados para unirse sin conflictos.
-2. Pictogramas de [ARASAAC](https://arasaac.org) (CC BY-NC-SA) en vez de emojis para 1º básico.
-3. Pantalla de **reunión familiar semanal**: revisar la semana, elegir una meta y firmar un acuerdo.
+1. Invitar a un segundo adulto con su propia cuenta (hoy los adultos comparten la cuenta de la familia).
+2. Pictogramas de [ARASAAC](https://arasaac.org) (CC BY-NC-SA).
+3. Pantalla de **reunión familiar semanal**.
 
 ## Estructura
 
@@ -98,6 +112,8 @@ css/app.css                               estilos
 js/main.js                                arranque y rutas (#/…)
 js/seed.js                                día escolar típico (editable en la app)
 js/store.js · js/acciones.js              guardar datos y cambios
+js/nube.js · js/config.js                 sincronización con Supabase
+supabase/schema.sql                       tablas y reglas de acceso (RLS)
 js/logic.js                               cálculos (sueño, lectura, pantalla, logros, sugerencias)
 js/kid.js · js/parent.js · js/ui.js       pantallas
 js/puente-applicatzo.js                   Applicatzo → Rutinapp
