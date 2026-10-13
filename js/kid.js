@@ -3,7 +3,7 @@ import { S } from './store.js';
 import * as A from './acciones.js';
 import * as L from './logic.js';
 import { MATERIAS } from './seed.js';
-import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, speak, chime, mmss, DIAS_CORTOS, weekday, addDays } from './util.js';
+import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, chime, mmss, DIAS_CORTOS, weekday, addDays } from './util.js';
 import { ir, rerender, intervalo, toast, modal, celebrar, pinPad, disco, barra } from './ui.js';
 
 const volver = (k, texto = '← Mi día') =>
@@ -242,9 +242,7 @@ export function vistaRutina(k, r) {
         h('span', { class: 'paso-check' }, hecho ? '✓' : ''),
         h('span', { class: 'paso-emoji' }, p.emoji),
         h('span', { class: 'paso-texto' }, texto, p.min ? h('small', {}, ` · ${p.min} min`) : null)),
-        h('div', { class: 'paso-extra' },
-          botonAccion(k, p),
-          h('button', { class: 'btn ghost chico', 'aria-label': 'Escuchar', onclick: () => speak(texto) }, '🔊')));
+        h('div', { class: 'paso-extra' }, botonAccion(k, p)));
     })));
 }
 
@@ -348,7 +346,6 @@ export function vistaPasoAPaso(k, r) {
   };
   tick();
   intervalo(tick, 1000);
-  if (k.voz) setTimeout(() => speak(texto), 300);
 
   return h('div', { class: 'paso-a-paso' },
     h('div', { class: 'fila-top' },
@@ -359,7 +356,6 @@ export function vistaPasoAPaso(k, r) {
     h('div', { class: 'tarjeta-paso', style: { '--kc': k.color } },
       h('div', { class: 'gigante' }, p.emoji),
       h('h1', { class: 'paso-grande' }, texto),
-      h('button', { class: 'btn ghost', onclick: () => speak(texto) }, '🔊 Escuchar'),
       totalSeg > 0 ? timer.el : null,
       botonAccion(k, p)),
     h('div', { class: 'fila-botones' },
@@ -563,7 +559,7 @@ export function vistaJuego(k) {
   let elegido = null;
   const grilla = h('div', { class: 'grilla-juegos' });
   const pintar = () => grilla.replaceChildren(...S.juegos.map(j =>
-    h('button', { class: `juego ${j === elegido ? 'elegido' : ''}`, onclick: () => { elegido = j; speak(j); pintar(); } }, j)));
+    h('button', { class: `juego ${j === elegido ? 'elegido' : ''}`, onclick: () => { elegido = j; pintar(); } }, j)));
   pintar();
   return h('div', { class: 'juegos' },
     volver(k),
@@ -573,7 +569,6 @@ export function vistaJuego(k) {
       class: 'btn big ancho', style: { background: k.color }, onclick: () => {
         if (!S.juegos.length) return;
         elegido = S.juegos[Math.floor(Math.random() * S.juegos.length)];
-        speak(elegido);
         pintar();
       },
     }, '🎲 Elige por mí'),

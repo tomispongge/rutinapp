@@ -1,4 +1,4 @@
-// Utilidades sin estado: DOM, fechas, identificadores, audio y voz.
+// Utilidades sin estado: DOM, fechas, identificadores y sonidos.
 
 // Crea un elemento. Todo el texto entra como nodos de texto (nunca innerHTML),
 // así lo que escriban niños o adultos no puede inyectar HTML.
@@ -143,21 +143,4 @@ export function chime(notas = 3) {
     o.start(t);
     o.stop(t + 0.45);
   });
-}
-
-// ---------- Voz (para quien todavía está aprendiendo a leer) ----------
-export function speak(texto) {
-  if (!('speechSynthesis' in window)) return;
-  const limpio = String(texto).replace(/\p{Extended_Pictographic}|️/gu, '').replace(/\s+/g, ' ').trim();
-  if (!limpio) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(limpio);
-  const voces = speechSynthesis.getVoices();
-  const voz = voces.find(v => v.lang === 'es-CL')
-    || voces.find(v => /^es[-_](419|MX|US)/.test(v.lang))
-    || voces.find(v => v.lang && v.lang.startsWith('es'));
-  if (voz) u.voice = voz;
-  u.lang = voz ? voz.lang : 'es-CL';
-  u.rate = 0.95;
-  speechSynthesis.speak(u);
 }

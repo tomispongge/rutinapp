@@ -495,7 +495,6 @@ function ajustes() {
         campo('Curso', sel([1, 2, 3, 4, 5, 6, 7, 8].map(c => [c, `${c}º básico`]), k.curso, v => { k.curso = Number(v); })),
         campo('Color', h('input', { type: 'color', class: 'input color-input', value: k.color, oninput: e => { k.color = e.target.value; } }))),
       h('div', { class: 'campo' }, h('span', {}, 'Avatar'), selectorAvatar(k.avatar, a => { k.avatar = a; })),
-      chk(k.voz, v => { k.voz = v; }, '🔊 Leer los pasos en voz alta automáticamente (para quien recién aprende a leer)'),
       h('h3', {}, '🎮 Pantalla de ocio (minutos al día)'),
       h('div', { class: 'form-fila' },
         campo('Lunes a viernes', num(k.pantallaHabil, v => { k.pantallaHabil = v ?? 0; }, { min: 0, max: 300 }), 'Pediatras españoles: ~1 h; Canadá y Suecia: máx. 2 h'),

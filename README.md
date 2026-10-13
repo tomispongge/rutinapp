@@ -8,7 +8,7 @@ No necesita instalación ni App Store: se abre en Safari y se agrega a la pantal
 
 **Para los niños** (sin login, eligen su avatar):
 - **Mi día**: la rutina de "ahora", la línea del día (rutinas, talleres y pantalla) y los días buenos de la semana.
-- **Rutinas paso a paso**: pasos con emoji, lectura en voz alta y temporizador visual tipo *Time Timer*. Cada paso suma 1 ⭐ y completar la rutina suma 2 ⭐ más.
+- **Rutinas paso a paso**: pasos con emoji y temporizador visual tipo *Time Timer*. Cada paso suma 1 ⭐ y completar la rutina suma 2 ⭐ más.
 - **Pantalla**: funciona como *primero estudio, después pantalla*. Tiene un presupuesto diario y un cronómetro que sigue contando aunque salgan de la app. Apagar a tiempo da 1 ⭐; si se pasan, ese exceso se descuenta al día siguiente.
 - **Plan lector**: calcula cuántas páginas leer cada día para llegar al control.
 - **Pruebas**: se anotan al revisar los cuadernos. Si hay una prueba en los próximos 3 días, esa materia pasa primero en el estudio.

@@ -42,12 +42,12 @@ export function seedState() {
 
   const ninos = [
     {
-      id: A, apodo: 'Hija', avatar: '🦋', color: '#7c5cff', curso: 5, voz: false,
+      id: A, apodo: 'Hija', avatar: '🦋', color: '#7c5cff', curso: 5,
       pantallaHabil: 60, pantallaFinde: 120,
       sueno: { actual: '22:00', meta: '21:00', pasoMin: 15, cadaDias: 3, inicio: hoy },
     },
     {
-      id: B, apodo: 'Hijo', avatar: '🦖', color: '#f07b2f', curso: 1, voz: true,
+      id: B, apodo: 'Hijo', avatar: '🦖', color: '#f07b2f', curso: 1,
       pantallaHabil: 60, pantallaFinde: 120,
       sueno: { actual: '22:00', meta: '20:15', pasoMin: 15, cadaDias: 3, inicio: hoy },
     },
