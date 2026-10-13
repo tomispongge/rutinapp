@@ -56,6 +56,20 @@ export function importar(texto) {
   guardar();
 }
 
+// Para empezar de cero después de probar: borra estrellas, historial,
+// cronómetros y desbloqueos, pero conserva apodos, PIN, rutinas, talleres,
+// premios, libros (vuelven a su página inicial) y pruebas anotadas.
+export function borrarProgreso(hoy) {
+  S.eventos = [];
+  S.timers = {};
+  S.cronos = {};
+  S.desbloqueos = {};
+  S.ajustes.siestaHasta = null;
+  S.creado = hoy;
+  try { localStorage.removeItem(INBOX); } catch { /* nada */ }
+  guardar();
+}
+
 export function borrarTodo() {
   try {
     localStorage.removeItem(KEY);

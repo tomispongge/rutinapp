@@ -99,8 +99,8 @@ export function desmarcarPaso(ninoId, rutinaId, pasoId, dia = dayKey()) {
   guardar();
 }
 
-// Si el taller se suspende y hoy no había estudio, se agrega el estudio (plan B)
-// a la hora en que iba a empezar el taller. Devuelve la rutina agregada, si hubo.
+// Marca un taller como "fui" o "suspendida" y recalcula el plan B del día.
+// Devuelve los nombres de las rutinas que el plan B agregó.
 export function marcarActividad(ninoId, actividadId, estado) {
   const dia = dayKey();
   for (const e of S.eventos) {
@@ -110,17 +110,68 @@ export function marcarActividad(ninoId, actividadId, estado) {
     }
   }
   if (estado) push({ tipo: 'actividad', ninoId, actividadId, estado });
-  let agregada = null;
-  if (estado === 'suspendida') {
-    const sug = L.estudioSugerido(S, L.nino(S, ninoId), dia);
-    const act = S.actividades.find(a => a.id === actividadId);
-    if (sug) {
-      agregarRutinaHoy(ninoId, sug.rutina.id, act && act.desde);
-      agregada = sug.rutina;
+  const agregadas = aplicarPlanB(ninoId, dia);
+  guardar();
+  return agregadas;
+}
+
+// Plan B, recalculado desde cero cada vez que cambia el estado de un taller:
+// - Si se suspende el PRIMER taller del día, el niño llega a la hora normal del
+//   colegio: se agrega "Llegada del colegio" con todos sus pasos.
+// - Si se suspenden TODOS, se quita la llegada programada después de los talleres
+//   ("Llegada del taller").
+// - Si ese día no había estudio, se agrega.
+// Los cambios llevan origen 'planB' para poder deshacerlos si después marca "Fui".
+function aplicarPlanB(ninoId, dia) {
+  const k = L.nino(S, ninoId);
+  for (const e of S.eventos) {
+    if (!e.anulado && e.ninoId === ninoId && e.dia === dia && e.origen === 'planB') {
+      e.anulado = true;
+      e.u = Date.now();
     }
   }
-  guardar();
-  return agregada;
+  const acts = L.actividadesDelDia(S, k, dia);
+  const susp = acts.filter(a => L.estadoActividad(S, ninoId, a.id, dia) === 'suspendida');
+  if (!susp.length) return [];
+
+  const agregadas = [];
+  const primera = acts[0];
+  const inicioTalleres = toMin(primera.desde);
+  const primeraSuspendida = susp.includes(primera);
+  const hoy = L.rutinasDelDia(S, k, dia);
+
+  if (primeraSuspendida && !hoy.some(x => x.r.tipo === 'llegada' && x.hora && toMin(x.hora) < inicioTalleres)) {
+    const candidatas = S.rutinas
+      .filter(r => r.tipo === 'llegada' && r.ninos.includes(ninoId) && !hoy.some(x => x.r.id === r.id))
+      .sort((a, b) => (a.hora || '99').localeCompare(b.hora || '99'));
+    const colegio = candidatas.find(r => /colegio/i.test(r.nombre)) || candidatas[0];
+    if (colegio) {
+      push({ tipo: 'extra', ninoId, rutinaId: colegio.id, dia, hora: colegio.hora || '13:30', origen: 'planB' });
+      agregadas.push(colegio.nombre);
+    }
+  }
+  const llegadasTaller = hoy.filter(x => x.r.tipo === 'llegada' && x.hora && toMin(x.hora) >= inicioTalleres);
+  const ultimoQueFue = [...acts].reverse().find(a => !susp.includes(a));
+  if (!ultimoQueFue) {
+    for (const x of llegadasTaller) push({ tipo: 'omitir', ninoId, rutinaId: x.r.id, dia, origen: 'planB' });
+  } else if (susp.includes(acts[acts.length - 1])) {
+    // Fue a los primeros talleres pero se suspendieron los últimos: llega antes.
+    for (const x of llegadasTaller) {
+      if (toMin(x.hora) > toMin(ultimoQueFue.hasta)) {
+        push({ tipo: 'omitir', ninoId, rutinaId: x.r.id, dia, origen: 'planB' });
+        push({ tipo: 'extra', ninoId, rutinaId: x.r.id, dia, hora: ultimoQueFue.hasta, origen: 'planB' });
+      }
+    }
+  }
+  if (!hoy.some(x => x.r.tipo === 'estudio')) {
+    const estudio = S.rutinas.find(r => r.tipo === 'estudio' && r.ninos.includes(ninoId));
+    if (estudio) {
+      const hora = primeraSuspendida ? (estudio.hora || primera.desde) : susp[0].desde;
+      push({ tipo: 'extra', ninoId, rutinaId: estudio.id, dia, hora, origen: 'planB' });
+      agregadas.push(estudio.nombre);
+    }
+  }
+  return agregadas;
 }
 
 export function agregarRutinaHoy(ninoId, rutinaId, hora) {

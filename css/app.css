@@ -360,3 +360,7 @@ textarea.input { min-height: 140px; }
 .crono-num { font-size: 48px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .crono-info .fila-botones { justify-content: flex-start; margin: 6px 0 0; }
 .crono-mini { text-align: center; font-weight: 700; color: var(--muted); margin: 4px 0 0; min-height: 1.4em; }
+
+/* Estudio que ya debía hacerse y sigue pendiente */
+.item.atrasado { box-shadow: inset 6px 0 0 var(--medio), var(--sombra); }
+.item.atrasado small { color: var(--medio); font-weight: 700; }

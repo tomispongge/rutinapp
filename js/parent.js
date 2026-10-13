@@ -1,5 +1,5 @@
 // Modo adulto (protegido con PIN) y configuración inicial.
-import { S, guardar, exportar, importar, borrarTodo } from './store.js';
+import { S, guardar, exportar, importar, borrarTodo, borrarProgreso } from './store.js';
 import * as A from './acciones.js';
 import * as L from './logic.js';
 import { AVATARES, MATERIAS, TIPOS_RUTINA, ACCIONES } from './seed.js';
@@ -543,6 +543,19 @@ function ajustes() {
         h('button', { class: 'btn', onclick: () => descargar(`rutinapp-respaldo-${dayKey()}.json`, exportar()) }, '⬇️ Descargar respaldo'),
         h('button', { class: 'btn sec', onclick: () => archivo.click() }, '⬆️ Restaurar respaldo'),
         archivo)),
+
+    card('🧹 Empezar de cero',
+      h('p', { class: 'muted' }, 'Útil después de probar la app. Borra estrellas, pasos marcados, historial, minutos de pantalla y estudio, y canjes. Conserva apodos, PIN, rutinas, talleres, premios, libros y pruebas anotadas.'),
+      h('button', {
+        class: 'btn sec', onclick: () => modal({
+          titulo: '¿Borrar el progreso?',
+          cuerpo: h('p', {}, 'Las estrellas y el historial vuelven a cero. La configuración se mantiene. Si quieres, descarga antes un respaldo.'),
+          acciones: [
+            { texto: 'Sí, borrar progreso', clase: 'bad', onClick: () => { borrarProgreso(dayKey()); toast('Progreso borrado: todos parten de cero'); rerender(); } },
+            { texto: 'Cancelar', clase: 'ghost' },
+          ],
+        }),
+      }, 'Borrar progreso (mantener configuración)')),
 
     card('🛡️ Privacidad',
       h('p', {}, AVISO_PRIVACIDAD),

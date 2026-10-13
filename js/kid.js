@@ -52,7 +52,7 @@ function itemsDelDia(k, dia) {
     if (r.tipo === 'estudio') finEstudio = fin;
     if (r.tipo === 'llegada') finLlegada = fin;
     items.push({
-      hora, fin, emoji: r.emoji, titulo: r.nombre, hecho: p.completa, prog: p.total ? p.n / p.total : 0,
+      hora, fin, tipo: r.tipo, emoji: r.emoji, titulo: r.nombre, hecho: p.completa, prog: p.total ? p.n / p.total : 0,
       sub: r.tipo === 'noche' ? `${p.n}/${p.total} · luces ${L.lucesApagadas(S, k, dia)}` : `${p.n}/${p.total} pasos${subCrono(k, r, dia)}`,
       abrir: () => ir(`#/n/${k.id}/r/${r.id}`),
     });
@@ -60,24 +60,39 @@ function itemsDelDia(k, dia) {
   for (const a of L.actividadesDelDia(S, k, dia)) {
     const est = L.estadoActividad(S, k.id, a.id, dia);
     items.push({
-      hora: a.desde, fin: a.hasta, emoji: a.emoji, titulo: a.nombre, hecho: !!est,
+      hora: a.desde, fin: a.hasta, actividad: true, estado: est, emoji: a.emoji, titulo: a.nombre, hecho: !!est,
       sub: `${a.desde}–${a.hasta}${est === 'fui' ? ' · ✓ fui' : est === 'suspendida' ? ' · se suspendió' : ''}`,
       abrir: () => modalActividad(k, a),
     });
   }
   const pres = L.presupuestoPantalla(S, k, dia);
   const usado = L.minutosPantalla(S, k.id, dia) + L.transcurridoMs(S.timers[k.id]) / 60000;
+  const bloqueo = L.estudioPendiente(S, k, dia);
   items.push({
     // Después del estudio; si ese día no hay estudio (p. ej. días de taller), después de llegar.
     hora: finEstudio || finLlegada || '15:30', fin: null, emoji: '🎮', titulo: 'Pantalla', hecho: false, pantalla: true,
-    sub: `${Math.round(usado)} de ${pres.total} min`,
+    sub: bloqueo ? `🔒 Primero: ${bloqueo.rutina.nombre}` : `${Math.round(usado)} de ${pres.total} min`,
     abrir: () => ir(`#/n/${k.id}/pantalla`),
   });
   return items.sort((a, b) => (a.hora || '99').localeCompare(b.hora || '99'));
 }
 
+// Prioridad de la tarjeta "Ahora":
+// 1. un taller que está ocurriendo; 2. el estudio que ya debía empezar y sigue
+// pendiente (hasta la hora de la rutina de noche: dormir pesa más);
+// 3. lo que está en curso; 4. lo próximo; 5. lo último pendiente.
+function estudioAtrasado(items, ahora = nowMin()) {
+  const noche = items.find(i => i.tipo === 'noche' && i.hora);
+  if (noche && ahora >= toMin(noche.hora)) return null;
+  return items.find(i => i.tipo === 'estudio' && !i.hecho && i.hora && toMin(i.hora) <= ahora) || null;
+}
+
 function itemAhora(items) {
   const ahora = nowMin();
+  const taller = items.find(i => i.actividad && i.estado !== 'suspendida' && toMin(i.hora) <= ahora && ahora < toMin(i.fin));
+  if (taller) return { item: taller, cuando: 'Ahora' };
+  const est = estudioAtrasado(items, ahora);
+  if (est) return { item: est, cuando: ahora <= toMin(est.fin) ? 'Ahora' : '⚠️ Pendiente' };
   const pend = items.filter(i => !i.hecho && !i.pantalla && i.hora);
   const enCurso = pend.filter(i => toMin(i.hora) <= ahora && (!i.fin || ahora <= toMin(i.fin) + 60));
   if (enCurso.length) return { item: enCurso[enCurso.length - 1], cuando: 'Ahora' };
@@ -92,6 +107,8 @@ export function vistaDia(k) {
   const dia = dayKey();
   const items = itemsDelDia(k, dia);
   const ahora = itemAhora(items);
+  const atrasado = estudioAtrasado(items);
+  if (atrasado && nowMin() > toMin(atrasado.fin)) atrasado.sub += ' · ⚠️ pendiente';
   const meta = L.metaSemanal(S, k, dia);
   const libro = L.libroActivo(S, k.id);
   const pruebas = L.pruebasProximas(S, k.id, dia, 14);
@@ -122,14 +139,14 @@ export function vistaDia(k) {
     tarjetaEstudioExtra(k, dia),
     h('h2', { class: 'seccion' }, 'Mi día'),
     h('div', { class: 'linea' }, items.map(i =>
-      h('button', { class: `item ${i.hecho ? 'hecho' : ''}`, onclick: i.abrir },
+      h('button', { class: `item ${i.hecho ? 'hecho' : ''} ${i === atrasado && nowMin() > toMin(i.fin) ? 'atrasado' : ''}`, onclick: i.abrir },
         h('span', { class: 'item-hora' }, i.hora || ''),
         h('span', { class: 'item-emoji' }, i.emoji),
         h('span', { class: 'item-texto' }, h('strong', {}, i.titulo), h('small', {}, i.sub),
           i.prog != null && !i.pantalla ? barra(i.prog, k.color) : null),
         h('span', { class: 'item-check' }, i.hecho ? '✅' : '›')))),
     h('div', { class: 'tiles' },
-      tile('🎮', 'Pantalla', `Te quedan ${Math.max(0, Math.round(pres.total - usado))} min`, () => ir(`#/n/${k.id}/pantalla`)),
+      tile('🎮', 'Pantalla', L.estudioPendiente(S, k, dia) ? '🔒 Primero estudio' : `Te quedan ${Math.max(0, Math.round(pres.total - usado))} min`, () => ir(`#/n/${k.id}/pantalla`)),
       libro ? tile('📖', 'Plan lector', planCorto(libro, dia), () => ir(`#/n/${k.id}/lector`)) : null,
       tile('📅', 'Pruebas', pruebas.length ? `${pruebas.length} próxima${pruebas.length > 1 ? 's' : ''}` : 'Anotar', () => ir(`#/n/${k.id}/pruebas`)),
       tile('⭐', 'Premios y logros', `${L.disponibles(S, k.id)} ⭐ para canjear`, () => ir(`#/n/${k.id}/premios`)),
@@ -167,8 +184,8 @@ function modalActividad(k, a) {
       { texto: '✅ Fui', clase: 'ok', onClick: () => { A.marcarActividad(k.id, a.id, 'fui'); rerender(); } },
       {
         texto: '🌧️ Se suspendió', clase: 'sec', onClick: () => {
-          const r = A.marcarActividad(k.id, a.id, 'suspendida');
-          toast(r ? `Plan B: ${r.nombre} a las ${a.desde} · ${S.ajustes.planB}` : S.ajustes.planB);
+          const agregadas = A.marcarActividad(k.id, a.id, 'suspendida');
+          toast(agregadas.length ? `Plan B: se agregó ${agregadas.join(' y ')} · ${S.ajustes.planB}` : S.ajustes.planB);
           rerender();
         },
       },

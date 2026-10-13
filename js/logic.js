@@ -56,8 +56,10 @@ export function horaRutina(S, r, k, dia) {
 // estudio de plan B cuando se suspende un taller.
 export function rutinasDelDia(S, k, dia) {
   const wd = weekday(dia);
+  // Rutinas ocultas solo ese día (p. ej. "Llegada del taller" cuando se suspendieron todos los talleres).
+  const omitidas = new Set(vivos(S, k.id, 'omitir', dia).map(e => e.rutinaId));
   const lista = S.rutinas
-    .filter(r => r.ninos.includes(k.id) && r.dias.includes(wd))
+    .filter(r => r.ninos.includes(k.id) && r.dias.includes(wd) && !omitidas.has(r.id))
     .map(r => ({ r, hora: horaRutina(S, r, k, dia) }));
   for (const e of vivos(S, k.id, 'extra', dia)) {
     const r = S.rutinas.find(x => x.id === e.rutinaId);
