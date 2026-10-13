@@ -141,7 +141,7 @@ export function seedState() {
   ];
 
   // Talleres y actividades (días: 0 = domingo … 6 = sábado). Se agregan en
-  // Modo adulto → Rutinas → Talleres, para que los horarios reales no queden en el código público.
+  // Modo adulto → Talleres, para que los horarios reales no queden en el código público.
   const actividades = [];
 
   // Premios de experiencias y privilegios. La pantalla no es moneda de cambio:

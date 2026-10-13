@@ -80,7 +80,7 @@ Si Applicatzo se abre solo, sin pasar por Rutinapp, el puente no hace nada.
 
 - Solo se guardan apodo, curso, avatar y la actividad dentro de la app. Rutinapp no necesita apellidos, RUT, fechas de nacimiento ni diagnósticos.
 - Los identificadores son opacos (UUID), también en las URL.
-- El código es público (GitHub Pages). Los datos reales (apodos, talleres, libros, progreso) **no** están en el código: se ingresan en la app y quedan en el dispositivo.
+- El código es público (GitHub Pages). Los datos reales (apodos, talleres, libros, progreso) **no** están en el código: se ingresan en la app (los talleres, en Modo adulto → Talleres) y quedan en el dispositivo.
 - **Fase actual**: todo queda en el dispositivo (`localStorage`). No se envía nada a internet.
 - El PIN es un candado para niños, no una medida de seguridad.
 

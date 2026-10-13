@@ -3,7 +3,7 @@ import { S, guardar, exportar, importar, borrarTodo } from './store.js';
 import * as A from './acciones.js';
 import * as L from './logic.js';
 import { AVATARES, MATERIAS, TIPOS_RUTINA, ACCIONES } from './seed.js';
-import { h, uuid, dayKey, addDays, fechaCorta, horasMin, fromMin, nowMin, DIAS_CORTOS, SEMANA, weekday } from './util.js';
+import { h, uuid, dayKey, addDays, fechaCorta, horasMin, fromMin, nowMin, DIAS, DIAS_CORTOS, SEMANA, weekday } from './util.js';
 import { ir, rerender, toast, modal, pinPad } from './ui.js';
 
 // ---------- Ayudantes de formulario ----------
@@ -75,7 +75,7 @@ export function vistaConfigurar() {
         A.fijarPin(pin1);
         S.ajustes.configurado = true;
         guardar();
-        toast('¡Listo! Agrega los talleres en Modo adulto → Rutinas.');
+        toast('¡Listo! Agrega los talleres en Modo adulto → Talleres.');
         ir('#/');
       },
     }, 'Empezar'));
@@ -85,6 +85,7 @@ export function vistaConfigurar() {
 const TABS = [
   ['resumen', '📊 Resumen'],
   ['rutinas', '🗓️ Rutinas'],
+  ['talleres', '🏐 Talleres'],
   ['premios', '⭐ Premios'],
   ['lectura', '📖 Lectura y pruebas'],
   ['ajustes', '⚙️ Ajustes'],
@@ -101,7 +102,7 @@ export function vistaAdulto(tab = 'resumen', arg) {
     return h('div', { class: 'centro pad' }, h('p', { class: 'muted' }, '🔒 Modo adulto'));
   }
   A.activarAdulto(); // renueva los 15 minutos con cada vista
-  const vistas = { resumen, rutinas, premios, lectura, ajustes };
+  const vistas = { resumen, rutinas, talleres, premios, lectura, ajustes };
   return h('div', { class: 'adulto' },
     h('div', { class: 'fila-top' },
       h('button', { class: 'btn ghost', onclick: () => { A.cerrarAdulto(); ir('#/'); } }, '← Salir'),
@@ -248,8 +249,7 @@ function rutinas(arg) {
             ],
           }),
         }, '🗑️')))),
-      h('button', { class: 'btn', onclick: () => ir('#/adulto/rutinas/nueva') }, '+ Nueva rutina')),
-    editorActividades());
+      h('button', { class: 'btn', onclick: () => ir('#/adulto/rutinas/nueva') }, '+ Nueva rutina')));
 }
 
 function editorRutina(orig) {
@@ -309,30 +309,68 @@ function editorRutina(orig) {
   return cont;
 }
 
-function editorActividades() {
-  const borr = JSON.parse(JSON.stringify(S.actividades));
+// ---------------- Talleres ----------------
+// Una tarjeta por taller y día, con campos rotulados. Se guarda solo:
+// los talleres sin nombre o con fin antes del inicio esperan hasta estar completos.
+const ORDEN_DIA = wd => SEMANA.indexOf(Number(wd));
+
+function talleres() {
+  const borr = JSON.parse(JSON.stringify(S.actividades)).sort((a, b) =>
+    a.ninoId.localeCompare(b.ninoId) || ORDEN_DIA(a.dia) - ORDEN_DIA(b.dia) || a.desde.localeCompare(b.desde));
   const cont = h('div');
-  const pintar = () => cont.replaceChildren(card('🏐 Talleres y actividades',
-    h('p', { class: 'muted' }, 'Aparecen en «Mi día». Si se suspende uno, el niño lo marca y la app propone el plan B.'),
-    h('div', { class: 'pasos-editor' }, borr.map((a, i) => h('div', { class: 'paso-fila' },
-      sel(S.ninos.map(k => [k.id, `${k.avatar} ${k.apodo}`]), a.ninoId, v => { a.ninoId = v; }),
-      inp({ value: a.emoji, maxlength: 4, class: 'input emoji-input' }, v => { a.emoji = v; }),
-      inp({ value: a.nombre, maxlength: 30 }, v => { a.nombre = v; }),
-      sel(SEMANA.map(wd => [wd, DIAS_CORTOS[wd]]), a.dia, v => { a.dia = Number(v); }),
-      inp({ type: 'time', value: a.desde }, v => { a.desde = v; }),
-      inp({ type: 'time', value: a.hasta }, v => { a.hasta = v; }),
-      h('button', { class: 'btn ghost chico', onclick: () => { borr.splice(i, 1); pintar(); } }, '🗑️')))),
-    h('div', { class: 'fila-botones' },
-      h('button', { class: 'btn sec', onclick: () => { borr.push({ id: uuid(), ninoId: S.ninos[0].id, nombre: '', emoji: '🏅', dia: 1, desde: '16:00', hasta: '17:00' }); pintar(); } }, '+ Agregar'),
+  const valido = a => a.nombre.trim() && a.desde && a.hasta && a.hasta > a.desde;
+  const guardarValidos = () => {
+    S.actividades = borr.filter(valido).map(a => ({ ...a, nombre: a.nombre.trim() }));
+    guardar();
+  };
+
+  const tarjeta = (a, i) => {
+    const aviso = h('small', { class: 'taller-aviso' });
+    const revisar = () => {
+      aviso.textContent = !a.nombre.trim() ? 'Escribe el nombre del taller para guardarlo.'
+        : a.hasta <= a.desde ? 'El fin tiene que ser después del inicio.' : '';
+    };
+    const cambio = (fn, repintar = false) => v => { fn(v); revisar(); guardarValidos(); if (repintar) pintar(); };
+    revisar();
+    return h('div', { class: 'taller' },
+      h('div', { class: 'form-fila' },
+        campo('Emoji', inp({ value: a.emoji, maxlength: 4, class: 'input emoji-input' }, cambio(v => { a.emoji = v; })), null),
+        campo('Nombre del taller', inp({ value: a.nombre, maxlength: 30, placeholder: 'Vóley, patinaje, inglés…' }, cambio(v => { a.nombre = v; })))),
+      h('div', { class: 'form-fila' },
+        campo('¿Quién?', sel(S.ninos.map(k => [k.id, `${k.avatar} ${k.apodo}`]), a.ninoId, cambio(v => { a.ninoId = v; }))),
+        campo('Día', sel(SEMANA.map(wd => [wd, DIAS[wd]]), a.dia, cambio(v => { a.dia = Number(v); })))),
+      h('div', { class: 'form-fila' },
+        campo('Inicio', inp({ type: 'time', value: a.desde, onchange: e => cambio(v => { a.desde = v; })(e.target.value) })),
+        campo('Fin', inp({ type: 'time', value: a.hasta, onchange: e => cambio(v => { a.hasta = v; })(e.target.value) }))),
+      aviso,
+      h('div', { class: 'fila-botones izq' },
+        h('button', {
+          class: 'btn sec chico', onclick: () => {
+            const siguiente = SEMANA[(ORDEN_DIA(a.dia) + 1) % 7];
+            borr.splice(i + 1, 0, { ...a, id: uuid(), dia: siguiente });
+            guardarValidos();
+            pintar();
+            toast('Copiado: elige el otro día');
+          },
+        }, '📋 Copiar para otro día'),
+        h('button', { class: 'btn ghost chico', onclick: () => { borr.splice(i, 1); guardarValidos(); pintar(); } }, '🗑️ Quitar')));
+  };
+
+  const pintar = () => cont.replaceChildren(
+    card('🏐 Talleres y actividades',
+      h('p', { class: 'muted' }, 'Aparecen en «Mi día» de cada niño. Agrega uno por cada día (si es dos veces por semana, usa «Copiar para otro día»). Si se suspende, el niño lo marca y la app agrega el estudio como plan B.'),
+      borr.length ? h('div', { class: 'talleres' }, borr.map(tarjeta))
+        : h('p', { class: 'aviso' }, 'Todavía no hay talleres.'),
       h('button', {
         class: 'btn', onclick: () => {
-          S.actividades = borr.filter(a => a.nombre.trim() && a.desde && a.hasta);
-          guardar();
-          toast('Talleres guardados');
-          rerender();
+          borr.push({ id: uuid(), ninoId: S.ninos[0].id, nombre: '', emoji: '🏅', dia: 1, desde: '16:00', hasta: '17:00' });
+          pintar();
         },
-      }, 'Guardar talleres')),
-    campo('Plan B cuando se suspende', inp({ value: S.ajustes.planB, maxlength: 120 }, v => { S.ajustes.planB = v; guardar(); }))));
+      }, '+ Agregar taller'),
+      h('p', { class: 'muted chico' }, '✓ Los cambios se guardan solos.')),
+    card('🌧️ Si se suspende un taller',
+      campo('Mensaje de plan B', inp({ value: S.ajustes.planB, maxlength: 120 }, v => { S.ajustes.planB = v; guardar(); }),
+        'Se muestra al niño junto con el estudio que se agrega ese día.')));
   pintar();
   return cont;
 }
