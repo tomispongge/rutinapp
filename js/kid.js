@@ -119,6 +119,7 @@ export function vistaDia(k) {
         h('span', { class: 'ahora-sub' }, ahora.item.sub),
         h('span', { class: 'btn big', style: { background: k.color } }, '▶ Vamos'))
       : h('div', { class: 'ahora listo' }, h('span', { class: 'ahora-emoji' }, '🎉'), h('span', { class: 'ahora-titulo' }, '¡Todo listo por hoy!')),
+    tarjetaEstudioExtra(k, dia),
     h('h2', { class: 'seccion' }, 'Mi día'),
     h('div', { class: 'linea' }, items.map(i =>
       h('button', { class: `item ${i.hecho ? 'hecho' : ''}`, onclick: i.abrir },
@@ -133,6 +134,20 @@ export function vistaDia(k) {
       tile('📅', 'Pruebas', pruebas.length ? `${pruebas.length} próxima${pruebas.length > 1 ? 's' : ''}` : 'Anotar', () => ir(`#/n/${k.id}/pruebas`)),
       tile('⭐', 'Premios y logros', `${L.disponibles(S, k.id)} ⭐ para canjear`, () => ir(`#/n/${k.id}/premios`)),
       tile('🧩', 'Menú de juego', 'Ideas sin pantalla', () => ir(`#/n/${k.id}/juego`))));
+}
+
+function tarjetaEstudioExtra(k, dia) {
+  const sug = L.estudioSugerido(S, k, dia);
+  if (!sug) return null;
+  return h('div', { class: `aviso sugerencia-estudio ${sug.urgente ? 'importante' : ''}` },
+    h('span', {}, `📚 ${sug.motivo}`),
+    h('button', {
+      class: 'btn chico', onclick: () => {
+        A.agregarRutinaHoy(k.id, sug.rutina.id);
+        toast(`${sug.rutina.nombre} agregado a tu día`);
+        rerender();
+      },
+    }, `+ Estudiar hoy (${L.duracion(sug.rutina)} min)`));
 }
 
 function planCorto(libro, dia) {
@@ -150,7 +165,13 @@ function modalActividad(k, a) {
     cuerpo: h('p', {}, `Hoy de ${a.desde} a ${a.hasta}. ¿Cómo te fue?`),
     acciones: [
       { texto: '✅ Fui', clase: 'ok', onClick: () => { A.marcarActividad(k.id, a.id, 'fui'); rerender(); } },
-      { texto: '🌧️ Se suspendió', clase: 'sec', onClick: () => { A.marcarActividad(k.id, a.id, 'suspendida'); toast(S.ajustes.planB); rerender(); } },
+      {
+        texto: '🌧️ Se suspendió', clase: 'sec', onClick: () => {
+          const r = A.marcarActividad(k.id, a.id, 'suspendida');
+          toast(r ? `Plan B: ${r.nombre} a las ${a.desde} · ${S.ajustes.planB}` : S.ajustes.planB);
+          rerender();
+        },
+      },
       { texto: 'Cerrar', clase: 'ghost' },
     ],
   });
@@ -179,10 +200,16 @@ export function vistaRutina(k, r) {
   const dia = dayKey();
   const hechos = L.pasosHechos(S, k.id, r.id, dia);
   const prog = L.progresoRutina(S, k.id, r, dia);
-  const hora = L.horaRutina(S, r, k, dia);
+  const deHoy = L.rutinasDelDia(S, k, dia).find(x => x.r.id === r.id);
+  const hora = deHoy ? deHoy.hora : L.horaRutina(S, r, k, dia);
+  const esExtra = !!(deHoy && deHoy.extra);
 
   return h('div', { class: 'rutina' },
-    volver(k),
+    h('div', { class: 'fila-top' },
+      volver(k),
+      esExtra && !prog.n ? h('button', {
+        class: 'btn ghost chico', onclick: () => { A.quitarRutinaHoy(k.id, r.id); ir(`#/n/${k.id}`); },
+      }, 'Quitar de hoy') : null),
     h('header', { class: 'rutina-cab', style: { '--kc': k.color } },
       h('span', { class: 'rutina-emoji' }, r.emoji),
       h('div', {},

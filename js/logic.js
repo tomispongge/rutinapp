@@ -52,12 +52,32 @@ export function horaRutina(S, r, k, dia) {
   return porDia[weekday(dia)] || r.hora || '';
 }
 
+// Incluye las rutinas agregadas solo para ese día (evento 'extra'), p. ej. un
+// estudio de plan B cuando se suspende un taller.
 export function rutinasDelDia(S, k, dia) {
   const wd = weekday(dia);
-  return S.rutinas
+  const lista = S.rutinas
     .filter(r => r.ninos.includes(k.id) && r.dias.includes(wd))
-    .map(r => ({ r, hora: horaRutina(S, r, k, dia) }))
-    .sort((a, b) => (a.hora || '99').localeCompare(b.hora || '99'));
+    .map(r => ({ r, hora: horaRutina(S, r, k, dia) }));
+  for (const e of vivos(S, k.id, 'extra', dia)) {
+    const r = S.rutinas.find(x => x.id === e.rutinaId);
+    if (r && r.ninos.includes(k.id) && !lista.some(x => x.r.id === r.id)) lista.push({ r, hora: e.hora || '', extra: e.id });
+  }
+  return lista.sort((a, b) => (a.hora || '99').localeCompare(b.hora || '99'));
+}
+
+// Si hoy no hay estudio programado, ofrece agregarlo. Es "urgente" si hay
+// prueba en los próximos 3 días o si se suspendió un taller.
+export function estudioSugerido(S, k, dia) {
+  if (rutinasDelDia(S, k, dia).some(({ r }) => r.tipo === 'estudio')) return null;
+  const rutina = S.rutinas.find(r => r.tipo === 'estudio' && r.ninos.includes(k.id));
+  if (!rutina) return null;
+  const prueba = pruebasProximas(S, k.id, dia, 3)[0];
+  const suspendida = actividadesDelDia(S, k, dia).find(a => estadoActividad(S, k.id, a.id, dia) === 'suspendida');
+  const motivo = prueba ? `Tienes prueba de ${prueba.materia} ${cuandoEs(dia, prueba.fecha)}. ¿Repasamos hoy?`
+    : suspendida ? `Se suspendió ${suspendida.nombre}: hoy hay tiempo para estudiar.`
+      : 'Hoy no te toca estudio. Si tienes tiempo, puedes agregarlo.';
+  return { rutina, motivo, urgente: !!(prueba || suspendida) };
 }
 
 export function actividadesDelDia(S, k, dia) {

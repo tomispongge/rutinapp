@@ -334,3 +334,7 @@ textarea.input { min-height: 140px; }
 .pd-emoji, .premio-emoji, .logro-emoji {
   line-height: 1;
 }
+
+/* Sugerencia de estudio en días sin estudio programado */
+.sugerencia-estudio { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.aviso.importante { background: var(--medio-bg); color: #7a4d00; font-weight: 600; }

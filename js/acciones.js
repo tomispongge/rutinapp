@@ -1,6 +1,6 @@
 // Todas las modificaciones del estado pasan por aquí.
 import { S, guardar, INBOX } from './store.js';
-import { uuid, dayKey, clamp, hashPin, toMin } from './util.js';
+import { uuid, dayKey, clamp, hashPin, toMin, fromMin, nowMin } from './util.js';
 import * as L from './logic.js';
 
 function push(ev) {
@@ -40,6 +40,8 @@ export function desmarcarPaso(ninoId, rutinaId, pasoId, dia = dayKey()) {
   guardar();
 }
 
+// Si el taller se suspende y hoy no había estudio, se agrega el estudio (plan B)
+// a la hora en que iba a empezar el taller. Devuelve la rutina agregada, si hubo.
 export function marcarActividad(ninoId, actividadId, estado) {
   const dia = dayKey();
   for (const e of S.eventos) {
@@ -49,6 +51,35 @@ export function marcarActividad(ninoId, actividadId, estado) {
     }
   }
   if (estado) push({ tipo: 'actividad', ninoId, actividadId, estado });
+  let agregada = null;
+  if (estado === 'suspendida') {
+    const sug = L.estudioSugerido(S, L.nino(S, ninoId), dia);
+    const act = S.actividades.find(a => a.id === actividadId);
+    if (sug) {
+      agregarRutinaHoy(ninoId, sug.rutina.id, act && act.desde);
+      agregada = sug.rutina;
+    }
+  }
+  guardar();
+  return agregada;
+}
+
+export function agregarRutinaHoy(ninoId, rutinaId, hora) {
+  const dia = dayKey();
+  const ya = S.eventos.some(e => !e.anulado && e.tipo === 'extra' && e.ninoId === ninoId && e.rutinaId === rutinaId && e.dia === dia);
+  if (ya) return;
+  push({ tipo: 'extra', ninoId, rutinaId, hora: hora || fromMin(Math.ceil(nowMin() / 5) * 5) });
+  guardar();
+}
+
+export function quitarRutinaHoy(ninoId, rutinaId) {
+  const dia = dayKey();
+  for (const e of S.eventos) {
+    if (!e.anulado && e.tipo === 'extra' && e.ninoId === ninoId && e.rutinaId === rutinaId && e.dia === dia) {
+      e.anulado = true;
+      e.u = Date.now();
+    }
+  }
   guardar();
 }
 
