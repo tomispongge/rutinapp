@@ -61,6 +61,12 @@ export function pausarCrono(ninoId) {
   }
 }
 
+// Vuelve a cero sin guardar el tiempo que llevaba.
+export function reiniciarCrono(ninoId) {
+  delete S.cronos[ninoId];
+  guardar();
+}
+
 // Guarda los minutos estudiados. Tope: el doble de lo planificado (mínimo 30 min),
 // por si el cronómetro quedó corriendo olvidado.
 export function terminarCrono(ninoId) {

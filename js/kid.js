@@ -301,7 +301,17 @@ function tarjetaCrono(k, r, completa) {
       h('div', { class: 'fila-botones' },
         corriendo
           ? h('button', { class: 'btn sec', onclick: () => { A.pausarCrono(k.id); rerender(); } }, '⏸ Pausa')
-          : h('button', { class: 'btn', style: { background: k.color }, onclick: () => { A.iniciarCrono(k.id, r.id); rerender(); } }, empezado ? '▶ Seguir' : '▶ Empezar'))));
+          : h('button', { class: 'btn', style: { background: k.color }, onclick: () => { A.iniciarCrono(k.id, r.id); rerender(); } }, empezado ? '▶ Seguir' : '▶ Empezar'),
+        empezado ? h('button', {
+          class: 'btn ghost', onclick: () => modal({
+            titulo: '↺ ¿Reiniciar el cronómetro?',
+            cuerpo: h('p', {}, `Vuelve a 0:00 y no se guarda el tiempo que llevas (${mmss(segCrono(k, r))}).`),
+            acciones: [
+              { texto: 'Sí, reiniciar', clase: 'bad', onClick: () => { A.reiniciarCrono(k.id); toast('Cronómetro en 0:00'); rerender(); } },
+              { texto: 'No', clase: 'ghost' },
+            ],
+          }),
+        }, '↺ Reiniciar') : null)));
 }
 
 function lineaCrono(k, r) {
