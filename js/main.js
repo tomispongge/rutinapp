@@ -6,7 +6,8 @@ import * as parent from './parent.js';
 import * as N from './nube.js';
 import { refrescarChats } from './mensajes.js';
 import { clear, unlockAudio, chime } from './util.js';
-import { setRenderer, limpiar, toast } from './ui.js';
+import { setRenderer, limpiar, toast, celebrar } from './ui.js';
+import { APPLICATZO_URL } from './config.js';
 
 const app = document.getElementById('app');
 
@@ -44,6 +45,7 @@ function resolver() {
       case 'premios': return kid.vistaPremios(k);
       case 'juego': return kid.vistaJuego(k);
       case 'mensajes': return kid.vistaMensajes(k);
+      case 'applicatzo': return kid.vistaApplicatzo(k, partes[3]);
       default: return kid.vistaDia(k);
     }
   }
@@ -59,7 +61,8 @@ function render() {
 
 // En formularios (modo adulto, bienvenida, inicio de sesión) no se redibuja solo:
 // se perdería lo que se está escribiendo.
-const enFormulario = () => /^#\/(adulto|configurar|nube)|\/mensajes$/.test(location.hash);
+// Applicatzo tampoco: redibujar recargaría el marco y se perdería la guía en curso.
+const enFormulario = () => /^#\/(adulto|configurar|nube)|\/(mensajes|applicatzo(\/\w+)?)$/.test(location.hash);
 
 // Al volver de Applicatzo (u otra app), recoge resultados y refresca las vistas de niños.
 function alVolver() {
@@ -92,6 +95,21 @@ N.iniciar(nuevos => {
   }
   refrescarChats();
   if (!enFormulario()) render();
+});
+
+// Resultados que manda Applicatzo desde su marco. Se aceptan solo si vienen del
+// sitio de Applicatzo, del marco abierto y para el niño que lo está usando.
+const ORIGEN_APPLICATZO = new URL(APPLICATZO_URL).origin;
+window.addEventListener('message', e => {
+  const d = e.data;
+  const marco = kid.marcoApplicatzo();
+  if (e.origin !== ORIGEN_APPLICATZO || !marco || e.source !== marco.contentWindow) return;
+  if (!d || d.tipo !== 'rutinapp-resultado' || !location.hash.startsWith(`#/n/${d.nino}/applicatzo`)) return;
+  const ev = A.recibirResultado(d);
+  if (!ev) return;
+  celebrar(2, ev.total ? `${ev.modulo}: ${ev.correctas}/${ev.total} · +2 ⭐` : `${ev.modulo} · +2 ⭐`);
+  const pill = document.querySelector('.applicatzo-estrellas');
+  if (pill) pill.textContent = `⭐ ${S.eventos.filter(x => !x.anulado && x.ninoId === d.nino).reduce((a, x) => a + (x.estrellas || 0), 0)}`;
 });
 
 if ('serviceWorker' in navigator && window.isSecureContext) {

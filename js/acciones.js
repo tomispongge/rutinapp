@@ -376,29 +376,37 @@ export function fijarSiesta(hhmm) {
 // ---------------- Resultados de Applicatzo ----------------
 // Se premia terminar la guía (2 ⭐), no cada respuesta correcta: así la
 // recompensa no compite con las ganas de aprender.
+// Registra un resultado (venga del marco de Applicatzo o del buzón antiguo).
+// Devuelve el evento creado, o null si no es válido o ya estaba.
+export function recibirResultado(it) {
+  if (!it || typeof it !== 'object' || !L.nino(S, it.nino)) return null;
+  const id = typeof it.id === 'string' && /^[0-9a-f-]{8,40}$/i.test(it.id) ? it.id : uuid();
+  if (S.eventos.some(e => e.id === id)) return null;
+  // La hora la pone este equipo si la recibida no es razonable.
+  const ts = Math.abs((Number(it.ts) || 0) - Date.now()) < 86400000 ? Number(it.ts) : Date.now();
+  const dia = dayKey(new Date(ts));
+  const e = {
+    id, ts, dia, tipo: 'applicatzo', ninoId: it.nino,
+    modulo: String(it.modulo || 'Guía').slice(0, 80),
+    correctas: clamp(Math.round(Number(it.correctas) || 0), 0, 500),
+    total: clamp(Math.round(Number(it.total) || 0), 0, 500),
+    estrellas: 2,
+  };
+  S.eventos.push(e);
+  const pc = L.pasoConAccion(S, it.nino, dia, it.copia ? 'copia' : 'applicatzo')
+    || (it.copia ? null : L.pasoConAccion(S, it.nino, dia, 'materia'));
+  if (pc) marcarPaso(it.nino, pc.rutina.id, pc.paso.id, { dia, ts });
+  guardar();
+  return e;
+}
+
+// Buzón antiguo (Applicatzo copiada dentro de Rutinapp, mismo sitio).
 export function ingerirInbox() {
   let items = [];
   try { items = JSON.parse(localStorage.getItem(INBOX) || '[]'); } catch { items = []; }
   if (!Array.isArray(items) || !items.length) return 0;
   let n = 0;
-  for (const it of items) {
-    if (!it || !L.nino(S, it.nino) || S.eventos.some(e => e.id === it.id)) continue;
-    const ts = Number(it.ts) || Date.now();
-    const dia = dayKey(new Date(ts));
-    const correctas = clamp(Math.round(Number(it.correctas) || 0), 0, 500);
-    const total = clamp(Math.round(Number(it.total) || 0), 0, 500);
-    S.eventos.push({
-      id: typeof it.id === 'string' ? it.id.slice(0, 40) : uuid(),
-      ts, dia, tipo: 'applicatzo', ninoId: it.nino,
-      modulo: String(it.modulo || 'Guía').slice(0, 80),
-      correctas, total, estrellas: 2,
-    });
-    const pc = L.pasoConAccion(S, it.nino, dia, it.copia ? 'copia' : 'applicatzo')
-      || (it.copia ? null : L.pasoConAccion(S, it.nino, dia, 'materia'));
-    if (pc) marcarPaso(it.nino, pc.rutina.id, pc.paso.id, { dia, ts });
-    n++;
-  }
+  for (const it of items) if (recibirResultado(it)) n++;
   try { localStorage.removeItem(INBOX); } catch { /* nada */ }
-  guardar();
   return n;
 }

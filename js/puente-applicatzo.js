@@ -1,13 +1,22 @@
 /*
  * Puente Applicatzo → Rutinapp.
- * Se agrega al final de Applicatzo con UNA línea, justo antes de </body>:
- *   <script src="../js/puente-applicatzo.js"></script>
- * Si Applicatzo se abre solo (sin ?nino=…), este archivo no hace nada.
- * Guarda cada guía terminada en localStorage ('rutinapp.inbox'); Rutinapp la
- * recoge al volver, suma estrellas y marca el paso de estudio.
+ * Se agrega UNA vez al final de Applicatzo, justo antes del último </body>:
+ *   <script src="https://tomispongge.github.io/rutinapp/js/puente-applicatzo.js"></script>
+ * Fuera de Rutinapp no hace nada, así que Applicatzo funciona igual sola.
+ *
+ * Dentro de Rutinapp, Applicatzo se abre en un marco (iframe) con ?nino=…&curso=…
+ * y este archivo avisa cada guía terminada con postMessage. Rutinapp suma
+ * estrellas y marca el paso de estudio.
+ *
+ * Detecta solo los módulos: los de 1º que usan mostrarResultados(tipo) y los
+ * de 5º que muestran "correctas/total" en un contenedor id="contenedor-resultados…".
+ * Si agregas módulos nuevos con ese mismo estilo, quedan conectados sin tocar nada.
  */
 (function () {
   'use strict';
+  // Sitios de Rutinapp que pueden recibir los resultados.
+  var ORIGENES = ['https://tomispongge.github.io', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+
   var params = new URLSearchParams(location.search);
   var nino = params.get('nino');
   try {
@@ -16,6 +25,7 @@
   } catch (e) { /* sin sessionStorage */ }
   if (!nino || !/^[0-9a-f-]{36}$/i.test(nino)) return;
 
+  var enMarco = window.parent !== window;
   var INBOX = 'rutinapp.inbox';
 
   function id() {
@@ -32,36 +42,42 @@
     setTimeout(function () { el.remove(); }, 2600);
   }
 
+  // Quita emojis y el sufijo " — 5° Básico" de un título.
+  function limpiarTitulo(t) {
+    return String(t || '').split(' — ')[0].replace(/^[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ¿¡]+/, '').trim().slice(0, 80);
+  }
+
   function registrar(datos) {
+    datos.id = id();
+    datos.nino = nino;
+    datos.ts = Date.now();
+    if (enMarco) {
+      datos.tipo = 'rutinapp-resultado';
+      // postMessage solo entrega el mensaje si el origen coincide: los demás se descartan.
+      ORIGENES.forEach(function (o) { try { window.parent.postMessage(datos, o); } catch (e) { /* ignorar */ } });
+      return; // la celebración la muestra Rutinapp
+    }
+    // Modo antiguo: Applicatzo copiada dentro de Rutinapp (mismo sitio).
     try {
       var arr = JSON.parse(localStorage.getItem(INBOX) || '[]');
       if (!Array.isArray(arr)) arr = [];
-      datos.id = id();
-      datos.nino = nino;
-      datos.ts = Date.now();
       arr.push(datos);
       localStorage.setItem(INBOX, JSON.stringify(arr.slice(-200)));
       aviso('⭐ Guardado en Rutinapp: +2 ⭐');
     } catch (e) { /* almacenamiento lleno o bloqueado */ }
   }
 
-  // Botón flotante para volver.
-  var volver = document.createElement('a');
-  volver.href = '../index.html#/n/' + nino;
-  volver.textContent = '🏠 Volver a Rutinapp';
-  volver.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99998;background:#6c4cf5;color:#fff;text-decoration:none;' +
-    'padding:14px 20px;border-radius:16px;font:700 17px system-ui,sans-serif;box-shadow:0 6px 20px rgba(108,76,245,.4)';
-  document.body.appendChild(volver);
+  if (!enMarco) {
+    var volver = document.createElement('a');
+    volver.href = '../index.html#/n/' + nino;
+    volver.textContent = '🏠 Volver a Rutinapp';
+    volver.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99998;background:#6c4cf5;color:#fff;text-decoration:none;' +
+      'padding:14px 20px;border-radius:16px;font:700 17px system-ui,sans-serif;box-shadow:0 6px 20px rgba(108,76,245,.4)';
+    document.body.appendChild(volver);
+  }
 
   // ---- 1º básico: mostrarResultados(tipo) ----
-  var NOMBRES_1 = {
-    'recta': 'Recta numérica', 'cuanto-falta': '¿Cuánto falta?', 'restas-simples': 'Restas simples',
-    'resta-imagenes': 'Resta con imágenes', 'decenas-unidades': 'Decenas y unidades', 'dobles': 'Dobles hasta 20',
-    'antecesor-sucesor': 'Antecesor y sucesor', 'dados': 'Completa el dado', 'problemas': 'Resolución de problemas',
-    'figuras': 'Figuras y cuerpos', 'tablas-multiplicar': 'Tablas de multiplicar'
-  };
   var yaRegistrados = typeof WeakSet === 'function' ? new WeakSet() : null;
-
   if (typeof window.mostrarResultados === 'function') {
     var original = window.mostrarResultados;
     window.mostrarResultados = function (tipo) {
@@ -74,14 +90,15 @@
         var respondidas = resp ? Object.keys(resp).length : 0;
         if (m && lista && yaRegistrados && !yaRegistrados.has(lista) && respondidas >= Math.ceil(lista.length / 2)) {
           yaRegistrados.add(lista);
-          registrar({ modulo: NOMBRES_1[tipo] || tipo, correctas: Number(m[1]), total: Number(m[2]), curso: 1 });
+          var titulo = document.querySelector('#' + tipo + ' h1');
+          registrar({ modulo: limpiarTitulo(titulo && titulo.textContent) || tipo, correctas: Number(m[1]), total: Number(m[2]), curso: 1 });
         }
       } catch (e) { /* no interrumpir Applicatzo */ }
       return r;
     };
   }
 
-  // ---- Copia en el cuaderno ----
+  // ---- Copia en el cuaderno (si existe) ----
   if (typeof window.marcarCopiaTerminada === 'function') {
     var copiaOriginal = window.marcarCopiaTerminada;
     window.marcarCopiaTerminada = function () {
@@ -92,22 +109,14 @@
     };
   }
 
-  // ---- 5º básico: cada módulo muestra "correctas/total" en su contenedor de resultados ----
-  var MODULOS_5 = {
-    'contenedor-resultados': ['modulo-multiplicacion', 'Multiplicación y división'],
-    'contenedor-resultados-ortografia': ['modulo-ortografia', 'Ortografía'],
-    'contenedor-resultados-vocabulario-ingles': ['modulo-vocabulario-ingles', 'Vocabulario en inglés'],
-    'contenedor-resultados-ciencias': ['modulo-ciencias', 'Ciencias Naturales'],
-    'contenedor-resultados-sistemas': ['modulo-sistemas', 'Sistemas del cuerpo'],
-    'contenedor-resultados-historia': ['modulo-historia', 'Historia'],
-    'contenedor-resultados-sucesiones': ['modulo-sucesiones', 'Sucesiones']
-  };
-  Object.keys(MODULOS_5).forEach(function (idCont) {
-    var cont = document.getElementById(idCont);
-    var modulo = document.getElementById(MODULOS_5[idCont][0]);
-    if (!cont || !modulo || typeof MutationObserver !== 'function') return;
-    // "pendiente" = hay una guía nueva sin registrar. Se rearma al generar ejercicios nuevos,
-    // así revisar dos veces la misma guía no suma doble.
+  // ---- 5º básico: todos los contenedores "contenedor-resultados…" ----
+  Array.prototype.forEach.call(document.querySelectorAll('[id^="contenedor-resultados"]'), function (cont) {
+    var modulo = cont.closest('[id^="modulo-"]');
+    if (!modulo || typeof MutationObserver !== 'function') return;
+    var h2 = modulo.querySelector('h2');
+    var nombre = limpiarTitulo(h2 && h2.textContent) || modulo.id.replace(/^modulo-/, '');
+    // "pendiente" = hay una guía nueva sin registrar; se rearma al generar ejercicios
+    // nuevos, así revisar dos veces la misma guía no suma doble.
     var pendiente = true;
     modulo.addEventListener('click', function (ev) {
       var b = ev.target.closest && ev.target.closest('button');
@@ -123,7 +132,7 @@
       });
       if (Number(m[1]) === 0 && !escribio) return;
       pendiente = false;
-      registrar({ modulo: MODULOS_5[idCont][1], correctas: Number(m[1]), total: Number(m[2]), curso: 5 });
+      registrar({ modulo: nombre, correctas: Number(m[1]), total: Number(m[2]), curso: 5 });
     }).observe(cont, { childList: true });
   });
 

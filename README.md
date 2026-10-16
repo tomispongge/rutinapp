@@ -52,16 +52,19 @@ Consejos para el iPad:
 
 ## Applicatzo
 
-Applicatzo vive en `applicatzo/index.html` y se abre desde los pasos de estudio. Cuando el niño presiona "Ver mis resultados" o "Revisar", el resultado se guarda en Rutinapp: suma 2 ⭐, marca el paso de estudio y aparece en el resumen del adulto.
+Applicatzo se abre **dentro de Rutinapp** desde su sitio en Vercel (`APPLICATZO_URL` en [`js/config.js`](js/config.js)), así que lo que publiques allá se ve solo, sin copiar archivos. Necesita internet.
 
-**Para actualizar Applicatzo** con una versión nueva:
-1. Copia el HTML nuevo sobre `applicatzo/index.html`.
-2. Agrega esta línea justo antes del **último** `</body>` del archivo:
-   ```html
-   <script src="../js/puente-applicatzo.js"></script>
-   ```
+Cuando el niño termina una guía, Applicatzo avisa a Rutinapp con un mensaje entre sitios (`postMessage`). Rutinapp suma 2 ⭐, marca el paso de estudio y lo muestra en el resumen del adulto. Solo acepta mensajes del sitio de Applicatzo, del marco abierto y para el niño que lo está usando.
 
-Si Applicatzo se abre solo, sin pasar por Rutinapp, el puente no hace nada.
+**Requisito (una sola vez):** Applicatzo debe tener esta línea justo antes del **último** `</body>`:
+```html
+<script src="https://tomispongge.github.io/rutinapp/js/puente-applicatzo.js"></script>
+```
+Abierta por fuera de Rutinapp, esa línea no hace nada.
+
+La conexión encuentra sola los módulos, incluidos los nuevos, si mantienen el mismo estilo:
+- **1º básico:** botón que llama a `mostrarResultados('tipo')` y texto "Respondiste correctamente X de Y". El nombre sale del título `<h1>` de la sección.
+- **5º básico:** contenedor `id="contenedor-resultados…"` dentro de `id="modulo-…"`, que muestra "X/Y". El nombre sale del `<h2>` del módulo. Los botones de guía nueva deben tener `generar` o `nuevos` en su id.
 
 ## Decisiones basadas en evidencia
 
@@ -117,6 +120,5 @@ supabase/schema.sql                       tablas y reglas de acceso (RLS)
 js/logic.js                               cálculos (sueño, lectura, pantalla, logros, sugerencias)
 js/kid.js · js/parent.js · js/ui.js       pantallas
 js/puente-applicatzo.js                   Applicatzo → Rutinapp
-applicatzo/index.html                     copia de Applicatzo con el puente
 tools/iconos.mjs                          genera los íconos (node tools/iconos.mjs)
 ```

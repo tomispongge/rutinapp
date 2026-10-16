@@ -4,8 +4,9 @@ import * as A from './acciones.js';
 import * as L from './logic.js';
 import { MATERIAS } from './seed.js';
 import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, chime, mmss, DIAS_CORTOS, weekday, addDays } from './util.js';
-import { ir, rerender, intervalo, toast, modal, celebrar, pinPad, disco, barra } from './ui.js';
+import { ir, rerender, intervalo, toast, modal, celebrar, pinPad, disco, barra, alLimpiar } from './ui.js';
 import { chat, recorte } from './mensajes.js';
+import { APPLICATZO_URL } from './config.js';
 
 const volver = (k, texto = '← Mi día') =>
   h('button', { class: 'btn ghost volver', onclick: () => ir(`#/n/${k.id}`) }, texto);
@@ -211,10 +212,28 @@ function botonAccion(k, p) {
   return h('button', { class: 'btn sec chico', onclick: e => { e.stopPropagation(); abrir[1](); } }, abrir[0]);
 }
 
-export function abrirApplicatzo(k, ir_ = '') {
+export function abrirApplicatzo(k, seccion = '') {
+  ir(`#/n/${k.id}/applicatzo${seccion ? `/${seccion}` : ''}`);
+}
+
+// ---------------- Applicatzo (desde Vercel, dentro de un marco) ----------------
+// El marco abierto se guarda para aceptar mensajes solo de él.
+let marco = null;
+export const marcoApplicatzo = () => marco;
+
+export function vistaApplicatzo(k, seccion) {
   const q = new URLSearchParams({ nino: k.id, curso: String(k.curso) });
-  if (ir_) q.set('ir', ir_);
-  location.href = `applicatzo/index.html?${q}`;
+  if (seccion) q.set('ir', seccion);
+  const src = `${APPLICATZO_URL}${APPLICATZO_URL.includes('?') ? '&' : '?'}${q}`;
+  marco = navigator.onLine === false ? null
+    : h('iframe', { class: 'applicatzo-marco', src, title: 'Applicatzo', referrerpolicy: 'origin' });
+  alLimpiar(() => { marco = null; });
+  return h('div', { class: 'applicatzo', style: { '--kc': k.color } },
+    h('div', { class: 'applicatzo-barra' },
+      h('button', { class: 'btn', style: { background: k.color }, onclick: () => ir(`#/n/${k.id}`) }, '← Volver a mi día'),
+      h('strong', { class: 'applicatzo-titulo' }, `📱 Applicatzo · ${k.avatar} ${k.apodo}`),
+      h('span', { class: 'pildora applicatzo-estrellas' }, `⭐ ${L.estrellas(S, k.id)}`)),
+    marco || h('div', { class: 'aviso centro' }, '📡 Applicatzo necesita internet. Conéctate y vuelve a intentar.'));
 }
 
 export function vistaRutina(k, r) {
