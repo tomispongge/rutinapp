@@ -290,26 +290,44 @@ export function borrarPrueba(id) {
 }
 
 // ---------------- Mensajes ----------------
-export function enviarMensaje(ninoId, de, texto, firma) {
+// opciones.urgente: se ve aunque el niño tenga rutinas pendientes.
+// opciones.costo: estrellas que paga el niño por un urgente (el saldo puede quedar negativo).
+export function enviarMensaje(ninoId, de, texto, firma, opciones = {}) {
   const t = String(texto || '').trim().slice(0, 500);
   if (!t) return null;
   const ev = { tipo: 'mensaje', ninoId, de, texto: t, leido: false };
   if (firma) ev.firma = String(firma).trim().slice(0, 30);
+  if (opciones.urgente) ev.urgente = true;
+  if (opciones.costo) {
+    ev.cobro = opciones.costo;
+    ev.estrellas = -opciones.costo;
+  }
   const e = push(ev);
   guardar();
   return e;
 }
 
+// El adulto devuelve las estrellas de un urgente justificado.
+export function devolverCobro(id) {
+  const e = S.eventos.find(x => x.id === id);
+  if (!e || !e.cobro || e.devuelto) return;
+  e.devuelto = true;
+  e.estrellas = 0;
+  e.u = Date.now();
+  guardar();
+}
+
 // Marca como vistos los mensajes que escribió el otro lado.
-export function marcarLeidos(ninoId, lector) {
+// soloUrgentes: con rutinas pendientes el niño solo ve (y lee) los urgentes.
+export function marcarLeidos(ninoId, lector, { soloUrgentes = false } = {}) {
   const now = Date.now();
   let n = 0;
   for (const e of S.eventos) {
-    if (!e.anulado && e.tipo === 'mensaje' && e.ninoId === ninoId && e.de !== lector && !e.leido) {
-      e.leido = true;
-      e.u = now;
-      n++;
-    }
+    if (e.anulado || e.tipo !== 'mensaje' || e.ninoId !== ninoId || e.de === lector || e.leido) continue;
+    if (soloUrgentes && !e.urgente) continue;
+    e.leido = true;
+    e.u = now;
+    n++;
   }
   if (n) guardar();
   return n;

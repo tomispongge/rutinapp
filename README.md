@@ -14,6 +14,7 @@ No necesita instalación ni App Store: se abre en Safari y se agrega a la pantal
 - **Pruebas**: se anotan al revisar los cuadernos. Si hay una prueba en los próximos 3 días, esa materia pasa primero en el estudio.
 - **Premios y logros**: se canjean estrellas por experiencias, con aprobación de un adulto.
 - **Menú de juego**: ideas sin pantalla para el tiempo libre.
+- **Mensajes con los adultos**: se abren cuando completó todas las rutinas cuya hora ya llegó. Mientras tanto ve sus propios mensajes y los **urgentes** del adulto (los puede responder una vez gratis); del resto solo sabe que hay mensajes esperando. Si necesita escribir con rutinas pendientes, un mensaje urgente le cuesta **5 ⭐**, aunque su saldo quede negativo. El adulto puede devolverle las estrellas si era justificado.
 
 **Para los adultos** (protegido con PIN):
 - **Resumen semanal**: % de cumplimiento, minutos de pantalla, sueño estimado, plan lector, guías de Applicatzo y **sugerencias de ajuste**. Las sugerencias detectan pasos que toman más tiempo del planificado, pasos que casi nunca se cumplen y hábitos listos para "graduarse".

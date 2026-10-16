@@ -404,3 +404,15 @@ textarea.input { min-height: 140px; }
 .applicatzo-titulo { flex: 1; min-width: 0; font-size: 17px; }
 .applicatzo-marco { flex: 1; width: 100%; border: 0; background: #fff; }
 .applicatzo > .aviso { margin: 24px 16px; }
+
+/* Mensajes: urgentes y bloqueo por rutinas pendientes */
+.burbuja.urgente { outline: 3px solid var(--bad); outline-offset: 1px; }
+.burbuja-urgente { font-weight: 800; color: var(--bad); }
+.burbuja.mia .burbuja-urgente { color: #fff; }
+.burbuja-accion { font-size: 13px; font-weight: 700; text-decoration: underline; color: inherit; padding: 0 4px; }
+.chat-esperando { align-self: center; text-align: center; font-weight: 600; color: var(--muted); background: #f6f2fb; border-radius: 14px; padding: 8px 14px; }
+.chat-bloqueo { display: flex; flex-direction: column; gap: 4px; }
+.chat-enviar { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.check.chico { min-height: 36px; padding: 4px 10px; font-size: 14px; }
+.aviso.mensaje-nuevo.urgente { background: var(--bad-bg); border-color: var(--bad); color: #7a1f1f; }
+.aviso.mensaje-nuevo.bloqueado { background: #f6f2fb; border-color: #b9a8e8; color: var(--ink); }

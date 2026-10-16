@@ -3,7 +3,7 @@ import { S, guardar, exportar, importar, borrarTodo, borrarProgreso } from './st
 import * as A from './acciones.js';
 import * as L from './logic.js';
 import * as N from './nube.js';
-import { chat, firma, pedirFirma } from './mensajes.js';
+import { chat, firma, pedirFirma, estadoNino } from './mensajes.js';
 import { AVATARES, MATERIAS, TIPOS_RUTINA, ACCIONES } from './seed.js';
 import { h, uuid, dayKey, addDays, fechaCorta, horasMin, fromMin, nowMin, DIAS, DIAS_CORTOS, SEMANA, weekday } from './util.js';
 import { ir, rerender, toast, modal, pinPad, alLimpiar, intervalo } from './ui.js';
@@ -738,5 +738,14 @@ function mensajes(ninoId) {
     })),
     h('p', { class: 'muted chico' }, firma() ? `Firmas como «${firma()}» · ` : 'Aún no eliges cómo firmar · ',
       h('button', { class: 'enlace', onclick: () => pedirFirma(() => rerender()) }, 'cambiar')),
+    avisoBloqueo(k),
     chat(k, 'adulto'));
+}
+
+function avisoBloqueo(k) {
+  const est = estadoNino(k);
+  if (!est.bloqueado) return h('p', { class: 'muted chico' }, `🔓 ${k.apodo} tiene sus rutinas al día: ve tus mensajes al tiro.`);
+  return h('p', { class: 'aviso' },
+    `🔒 ${k.apodo} tiene pendiente: ${est.pendientes.map(r => `${r.emoji} ${r.nombre}`).join(', ')}. `,
+    'Verá tus mensajes cuando lo termine. Marca 🚨 Urgente para que lo vea ya.');
 }

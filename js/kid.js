@@ -5,7 +5,7 @@ import * as L from './logic.js';
 import { MATERIAS } from './seed.js';
 import { h, dayKey, nowMin, toMin, fromMin, fechaLarga, fechaCorta, chime, mmss, DIAS_CORTOS, weekday, addDays } from './util.js';
 import { ir, rerender, intervalo, toast, modal, celebrar, pinPad, disco, barra, alLimpiar } from './ui.js';
-import { chat, recorte } from './mensajes.js';
+import { chat, recorte, estadoNino } from './mensajes.js';
 import { APPLICATZO_URL } from './config.js';
 
 const volver = (k, texto = '← Mi día') =>
@@ -154,7 +154,7 @@ export function vistaDia(k) {
       libro ? tile('📖', 'Plan lector', planCorto(libro, dia), () => ir(`#/n/${k.id}/lector`)) : null,
       tile('📅', 'Pruebas', pruebas.length ? `${pruebas.length} próxima${pruebas.length > 1 ? 's' : ''}` : 'Anotar', () => ir(`#/n/${k.id}/pruebas`)),
       tile('⭐', 'Premios y logros', `${L.disponibles(S, k.id)} ⭐ para canjear`, () => ir(`#/n/${k.id}/premios`)),
-      tile('💬', 'Mensajes', L.noLeidos(S, k.id, 'nino').length ? `📩 ${L.noLeidos(S, k.id, 'nino').length} sin leer` : 'Escribir a un adulto', () => ir(`#/n/${k.id}/mensajes`)),
+      tile('💬', 'Mensajes', textoTileMensajes(k), () => ir(`#/n/${k.id}/mensajes`)),
       tile('🧩', 'Menú de juego', 'Ideas sin pantalla', () => ir(`#/n/${k.id}/juego`))));
 }
 
@@ -626,13 +626,36 @@ export function vistaJuego(k) {
 }
 
 // ---------------- Mensajes ----------------
+// Con rutinas pendientes solo se muestra el contenido de los urgentes; del
+// resto se avisa que hay mensajes esperando, sin mostrarlos.
 function avisoMensaje(k) {
+  const est = estadoNino(k);
+  if (est.urgentesNuevos.length) {
+    const u = est.urgentesNuevos[est.urgentesNuevos.length - 1];
+    return h('button', { class: 'aviso mensaje-nuevo urgente', onclick: () => ir(`#/n/${k.id}/mensajes`) },
+      h('strong', {}, `🚨 Mensaje urgente de ${u.firma || 'un adulto'}`),
+      h('span', {}, `«${recorte(u.texto)}» · Toca para leer`));
+  }
+  if (est.bloqueado) {
+    if (!est.esperando) return null;
+    return h('button', { class: 'aviso mensaje-nuevo bloqueado', onclick: () => ir(`#/n/${k.id}/mensajes`) },
+      h('strong', {}, `📩 ${est.esperando === 1 ? 'Tienes un mensaje esperando' : `Tienes ${est.esperando} mensajes esperando`}`),
+      h('span', {}, `🔒 Termina ${est.pendientes.map(r => r.nombre).join(', ')} para leerlo.`));
+  }
   const nl = L.noLeidos(S, k.id, 'nino');
   if (!nl.length) return null;
   const ult = nl[nl.length - 1];
   return h('button', { class: 'aviso mensaje-nuevo', onclick: () => ir(`#/n/${k.id}/mensajes`) },
     h('strong', {}, `📩 ${nl.length === 1 ? 'Mensaje nuevo' : `${nl.length} mensajes nuevos`} de ${ult.firma || 'un adulto'}`),
     h('span', {}, `«${recorte(ult.texto)}» · Toca para leer`));
+}
+
+function textoTileMensajes(k) {
+  const est = estadoNino(k);
+  if (est.urgentesNuevos.length) return '🚨 Mensaje urgente';
+  if (est.bloqueado) return est.esperando ? `🔒 ${est.esperando} esperando` : '🔒 Termina tus rutinas';
+  const n = L.noLeidos(S, k.id, 'nino').length;
+  return n ? `📩 ${n} sin leer` : 'Escribir a un adulto';
 }
 
 export function vistaMensajes(k) {

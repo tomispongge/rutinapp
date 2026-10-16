@@ -237,6 +237,30 @@ export function mensajes(S, ninoId) {
 export const noLeidos = (S, ninoId, lector) => mensajes(S, ninoId).filter(m => m.de !== lector && !m.leido);
 export const noLeidosAdulto = S => S.ninos.reduce((a, k) => a + noLeidos(S, k.id, 'adulto').length, 0);
 
+// Los mensajes del niño se abren cuando completó todas las rutinas de hoy cuya
+// hora ya llegó. Devuelve esas rutinas pendientes (vacío = desbloqueado).
+export function rutinasPendientesAhora(S, k, dia, ahoraMin) {
+  return rutinasDelDia(S, k, dia)
+    .filter(({ r, hora }) => hora && toMin(hora) <= ahoraMin && !progresoRutina(S, k.id, r, dia).completa)
+    .map(x => x.r);
+}
+
+// Lo que el niño puede ver: siempre sus propios mensajes y los urgentes; el
+// resto, solo con las rutinas al día.
+export const visiblesNino = (S, ninoId, bloqueado) =>
+  mensajes(S, ninoId).filter(m => !bloqueado || m.de === 'nino' || m.urgente);
+
+// Un mensaje urgente del adulto que el niño todavía no responde: lo puede
+// responder gratis aunque tenga rutinas pendientes.
+export function urgenteSinResponder(S, ninoId) {
+  const ms = mensajes(S, ninoId);
+  const urg = [...ms].reverse().find(m => m.de === 'adulto' && m.urgente);
+  if (!urg) return null;
+  return ms.some(m => m.de === 'nino' && m.ts > urg.ts) ? null : urg;
+}
+
+export const COSTO_URGENTE = 5;
+
 // ---------------- Estrellas, meta semanal y logros ----------------
 export function estrellas(S, ninoId) {
   return S.eventos.reduce((a, e) => a + (!e.anulado && e.ninoId === ninoId ? (e.estrellas || 0) : 0), 0);

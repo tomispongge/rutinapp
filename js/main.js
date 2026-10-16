@@ -90,8 +90,10 @@ N.iniciar(nuevos => {
   if (msgs.length) {
     const m = msgs[msgs.length - 1];
     const k = S.ninos.find(x => x.id === m.ninoId);
-    chime(2);
-    toast(m.de === 'nino' ? `📩 ${k ? k.apodo : 'Un niño'} te escribió` : `📩 Mensaje de ${m.firma || 'un adulto'} para ${k ? k.apodo : ''}`);
+    chime(m.urgente ? 3 : 2);
+    const icono = m.urgente ? '🚨' : '📩';
+    toast(m.de === 'nino' ? `${icono} ${k ? k.apodo : 'Un niño'} te escribió${m.urgente ? ' (urgente)' : ''}`
+      : `${icono} Mensaje${m.urgente ? ' urgente' : ''} de ${m.firma || 'un adulto'} para ${k ? k.apodo : ''}`);
   }
   refrescarChats();
   if (!enFormulario()) render();
