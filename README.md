@@ -63,9 +63,9 @@ Cuando el niño termina una guía, Applicatzo avisa a Rutinapp con un mensaje en
 ```
 Abierta por fuera de Rutinapp, esa línea no hace nada.
 
-La conexión encuentra sola los módulos, incluidos los nuevos, si mantienen el mismo estilo:
-- **1º básico:** botón que llama a `mostrarResultados('tipo')` y texto "Respondiste correctamente X de Y". El nombre sale del título `<h1>` de la sección.
-- **5º básico:** contenedor `id="contenedor-resultados…"` dentro de `id="modulo-…"`, que muestra "X/Y". El nombre sale del `<h2>` del módulo. Los botones de guía nueva deben tener `generar` o `nuevos` en su id.
+La conexión se engancha a `registrarEnHistorial`, por donde pasan todas las guías: todo lo que aparece en "Revisión de Tareas" de Applicatzo llega a Rutinapp, también los módulos nuevos, sin tocar nada. Una guía con menos de la mitad respondida no suma estrellas.
+
+El detalle de cada respuesta se ve en **Modo adulto → 📝 Tareas**, en cualquier equipo con la sesión abierta. Se guarda en partes de hasta 7 KB (el límite de Supabase por evento es 10 KB) y se conserva el de las últimas 40 guías por niño; los puntajes se conservan todos.
 
 ## Decisiones basadas en evidencia
 

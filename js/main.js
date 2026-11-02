@@ -73,6 +73,7 @@ function alVolver() {
 }
 
 cargar();
+A.podarDetalles();
 A.ingerirInbox();
 A.cerrarTimersViejos();
 A.cerrarCronosViejos();

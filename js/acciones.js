@@ -411,11 +411,61 @@ export function recibirResultado(it) {
     estrellas: 2,
   };
   S.eventos.push(e);
+  guardarDetalle(e, it.detalle);
   const pc = L.pasoConAccion(S, it.nino, dia, it.copia ? 'copia' : 'applicatzo')
     || (it.copia ? null : L.pasoConAccion(S, it.nino, dia, 'materia'));
   if (pc) marcarPaso(it.nino, pc.rutina.id, pc.paso.id, { dia, ts });
   guardar();
   return e;
+}
+
+// Cada pregunta de la guía: [n, pregunta, respondió, correcta, ok, cómo se resuelve].
+// Supabase acepta eventos de hasta 10 KB, así que el detalle se guarda en partes.
+const MAX_BYTES_PARTE = 7000;
+const bytes = t => new TextEncoder().encode(t).length;
+
+function guardarDetalle(guia, detalle) {
+  if (!Array.isArray(detalle)) return;
+  const texto = (v, max) => String(v === undefined || v === null ? '' : v).slice(0, max);
+  const filas = detalle.slice(0, 120).map(f => [
+    texto(f.n, 6), texto(f.p, 260), texto(f.r, 120), texto(f.c, 120), f.ok ? 1 : 0, texto(f.nota, 200),
+  ]);
+  let parte = [];
+  let tam = 0;
+  let n = 0;
+  const cerrar = () => {
+    if (!parte.length) return;
+    S.eventos.push({
+      id: `detalle:${guia.id}:${n}`, ts: guia.ts, dia: guia.dia, tipo: 'detalle',
+      ninoId: guia.ninoId, guiaId: guia.id, parte: n, filas: parte, estrellas: 0,
+    });
+    n++;
+    parte = [];
+    tam = 0;
+  };
+  for (const f of filas) {
+    const t = bytes(JSON.stringify(f));
+    if (tam + t > MAX_BYTES_PARTE) cerrar();
+    parte.push(f);
+    tam += t;
+  }
+  cerrar();
+}
+
+// El detalle de las guías antiguas se descarta para no llenar el iPad;
+// los puntajes de todas las guías se conservan.
+const GUIAS_CON_DETALLE = 40;
+
+export function podarDetalles() {
+  const conservar = new Set();
+  for (const k of S.ninos) {
+    S.eventos.filter(e => !e.anulado && e.tipo === 'applicatzo' && e.ninoId === k.id)
+      .sort((a, b) => b.ts - a.ts).slice(0, GUIAS_CON_DETALLE)
+      .forEach(e => conservar.add(e.id));
+  }
+  const antes = S.eventos.length;
+  S.eventos = S.eventos.filter(e => e.tipo !== 'detalle' || conservar.has(e.guiaId));
+  if (S.eventos.length !== antes) guardar({ silencioso: true });
 }
 
 // Buzón antiguo (Applicatzo copiada dentro de Rutinapp, mismo sitio).

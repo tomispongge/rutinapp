@@ -328,6 +328,17 @@ export function resumenApplicatzo(S, ninoId) {
   }).sort((a, b) => b.ultimaDia.localeCompare(a.ultimaDia));
 }
 
+// Guías de un niño, de la más nueva a la más antigua, con el detalle de cada respuesta.
+export function guiasConDetalle(S, ninoId) {
+  const partes = {};
+  for (const e of vivos(S, ninoId, 'detalle')) (partes[e.guiaId] = partes[e.guiaId] || []).push(e);
+  return vivos(S, ninoId, 'applicatzo').sort((a, b) => b.ts - a.ts).map(g => ({
+    id: g.id, ts: g.ts, dia: g.dia, modulo: g.modulo, correctas: g.correctas, total: g.total,
+    filas: (partes[g.id] || []).sort((a, b) => a.parte - b.parte).flatMap(p => p.filas)
+      .map(([n, p, r, c, ok, nota]) => ({ n, p, r, c, ok: !!ok, nota })),
+  }));
+}
+
 export function logros(S, k, dia) {
   const ev = S.eventos.filter(e => !e.anulado && e.ninoId === k.id);
   const tipoRutina = id => (S.rutinas.find(r => r.id === id) || {}).tipo;

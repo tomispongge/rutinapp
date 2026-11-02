@@ -90,6 +90,7 @@ export function vistaConfigurar() {
 const TABS = [
   ['resumen', '📊 Resumen'],
   ['mensajes', '💬 Mensajes'],
+  ['tareas', '📝 Tareas'],
   ['rutinas', '🗓️ Rutinas'],
   ['talleres', '🏐 Talleres'],
   ['premios', '⭐ Premios'],
@@ -109,7 +110,7 @@ export function vistaAdulto(tab = 'resumen', arg) {
     return h('div', { class: 'centro pad' }, h('p', { class: 'muted' }, '🔒 Modo adulto'));
   }
   A.activarAdulto(); // renueva los 15 minutos con cada vista
-  const vistas = { resumen, mensajes, rutinas, talleres, premios, lectura, ajustes, nube };
+  const vistas = { resumen, mensajes, tareas, rutinas, talleres, premios, lectura, ajustes, nube };
   // La vista va primero: abrir un chat marca mensajes como leídos y el contador de la pestaña debe verlo.
   const cuerpo = (vistas[tab] || resumen)(arg);
   return h('div', { class: 'adulto' },
@@ -219,6 +220,7 @@ function tarjetaNino(k, dia) {
           h('td', {}, m.prom3 == null ? '—' : `${Math.round(m.prom3 * 100)} %`),
           h('td', {}, m.dominio ? '🎓' : '')))))
       : h('p', { class: 'muted' }, 'Todavía no hay guías registradas.'),
+    app.length ? h('button', { class: 'btn sec chico', onclick: () => ir(`#/adulto/tareas/${k.id}`) }, '📝 Ver cada respuesta') : null,
 
     h('h3', {}, '💡 Sugerencias de ajuste'),
     sug.length ? h('ul', { class: 'sugerencias' }, sug.map(s => h('li', {}, s)))
@@ -748,4 +750,55 @@ function avisoBloqueo(k) {
   return h('p', { class: 'aviso' },
     `🔒 ${k.apodo} tiene pendiente: ${est.pendientes.map(r => `${r.emoji} ${r.nombre}`).join(', ')}. `,
     'Verá tus mensajes cuando lo termine. Marca 🚨 Urgente para que lo vea ya.');
+}
+
+// ---------------- Tareas: cada guía de Applicatzo, pregunta por pregunta ----------------
+function tareas(ninoId) {
+  const k = L.nino(S, ninoId) || S.ninos[0];
+  const guias = L.guiasConDetalle(S, k.id);
+  let soloErrores = false;
+
+  const fila = f => h('div', { class: `guia-fila ${f.ok ? 'bien' : 'mal'}` },
+    h('p', { class: 'guia-pregunta' }, h('strong', {}, `${f.n}. `), f.p),
+    h('p', {}, `${f.ok ? '✓' : '✗'} Respondió: `, h('strong', {}, f.r)),
+    f.ok ? null : h('p', {}, 'Correcta: ', h('strong', {}, f.c)),
+    f.nota ? h('p', { class: 'muted chico' }, f.nota) : null);
+
+  const cuerpo = g => {
+    if (!g.filas.length) return [h('p', { class: 'muted' }, 'Sin detalle: es una guía anterior a esta función, o ya es muy antigua.')];
+    const filas = soloErrores ? g.filas.filter(f => !f.ok) : g.filas;
+    return filas.length ? filas.map(fila) : [h('p', { class: 'muted' }, '🎉 Sin errores en esta guía.')];
+  };
+
+  const tarjeta = g => {
+    const caja = h('div', { class: 'guia-cuerpo' });
+    const errores = g.filas.filter(f => !f.ok).length;
+    const nota = g.total ? `${g.correctas}/${g.total}` : '✓';
+    const clase = g.total ? colorPct(g.correctas / g.total) : 'ok';
+    const pie = g.filas.length && g.total ? ` · ${errores} error${errores === 1 ? '' : 'es'}` : '';
+    const el = h('details', {
+      class: 'guia',
+      ontoggle: e => { if (e.target.open) caja.replaceChildren(...cuerpo(g)); },
+    },
+    h('summary', {},
+      h('span', { class: 'crece' },
+        h('strong', {}, g.modulo),
+        h('small', { class: 'muted bloque' }, `${fechaCorta(g.dia)}, ${fromMin(nowMin(new Date(g.ts)))}${pie}`)),
+      h('span', { class: `etiqueta ${clase}` }, nota)),
+    caja);
+    return el;
+  };
+
+  const lista = h('div', { class: 'guias' }, guias.map(tarjeta));
+  return h('div', {},
+    h('div', { class: 'fila-checks' }, S.ninos.map(x =>
+      h('button', { class: `tab ${x.id === k.id ? 'on' : ''}`, onclick: () => ir(`#/adulto/tareas/${x.id}`) }, `${x.avatar} ${x.apodo}`))),
+    guias.length ? h('label', { class: 'check chico guias-filtro' },
+      h('input', {
+        type: 'checkbox', onchange: e => {
+          soloErrores = e.target.checked;
+          lista.querySelectorAll('details').forEach(d => { d.open = false; });
+        },
+      }), h('span', {}, 'Mostrar solo los errores')) : null,
+    guias.length ? lista : h('p', { class: 'aviso' }, `${k.apodo} todavía no tiene guías de Applicatzo registradas.`));
 }

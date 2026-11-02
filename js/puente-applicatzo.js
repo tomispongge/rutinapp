@@ -5,12 +5,13 @@
  * Fuera de Rutinapp no hace nada, así que Applicatzo funciona igual sola.
  *
  * Dentro de Rutinapp, Applicatzo se abre en un marco (iframe) con ?nino=…&curso=…
- * y este archivo avisa cada guía terminada con postMessage. Rutinapp suma
- * estrellas y marca el paso de estudio.
+ * y este archivo avisa cada guía terminada con postMessage, con el detalle de
+ * cada respuesta. Rutinapp suma estrellas, marca el paso de estudio y muestra
+ * el detalle en Modo adulto → Tareas.
  *
- * Detecta solo los módulos: los de 1º que usan mostrarResultados(tipo) y los
- * de 5º que muestran "correctas/total" en un contenedor id="contenedor-resultados…".
- * Si agregas módulos nuevos con ese mismo estilo, quedan conectados sin tocar nada.
+ * Se engancha a registrarEnHistorial, por donde pasan todas las guías de
+ * Applicatzo: todo lo que aparece en "Revisión de Tareas" llega a Rutinapp,
+ * también los módulos nuevos, sin tocar este archivo.
  */
 (function () {
   'use strict';
@@ -42,11 +43,6 @@
     setTimeout(function () { el.remove(); }, 2600);
   }
 
-  // Quita emojis y el sufijo " — 5° Básico" de un título.
-  function limpiarTitulo(t) {
-    return String(t || '').split(' — ')[0].replace(/^[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ¿¡]+/, '').trim().slice(0, 80);
-  }
-
   function registrar(datos) {
     datos.id = id();
     datos.nino = nino;
@@ -67,6 +63,31 @@
     } catch (e) { /* almacenamiento lleno o bloqueado */ }
   }
 
+  function enviarGuia(guia) {
+    var detalle = Array.isArray(guia.detalle) ? guia.detalle : [];
+    var total = typeof guia.total === 'number' ? guia.total : 0;
+    var respondidas = detalle.filter(function (f) { return f.r !== undefined && f.r !== null && f.r !== '' && f.r !== '—'; }).length;
+    // Revisar sin haber respondido al menos la mitad no cuenta como guía terminada.
+    if (total > 0 && respondidas < Math.ceil(total / 2)) return;
+    registrar({
+      modulo: guia.titulo || guia.modulo,
+      correctas: guia.correctas || 0,
+      total: total,
+      curso: Number(guia.grado) || 0,
+      copia: guia.modulo === 'copia',
+      detalle: detalle
+    });
+  }
+
+  if (typeof window.registrarEnHistorial === 'function') {
+    var registrarBase = window.registrarEnHistorial;
+    window.registrarEnHistorial = function (entrada) {
+      var r = registrarBase.apply(this, arguments);
+      try { enviarGuia(entrada); } catch (e) { /* no interrumpir Applicatzo */ }
+      return r;
+    };
+  }
+
   if (!enMarco) {
     var volver = document.createElement('a');
     volver.href = '../index.html#/n/' + nino;
@@ -75,66 +96,6 @@
       'padding:14px 20px;border-radius:16px;font:700 17px system-ui,sans-serif;box-shadow:0 6px 20px rgba(108,76,245,.4)';
     document.body.appendChild(volver);
   }
-
-  // ---- 1º básico: mostrarResultados(tipo) ----
-  var yaRegistrados = typeof WeakSet === 'function' ? new WeakSet() : null;
-  if (typeof window.mostrarResultados === 'function') {
-    var original = window.mostrarResultados;
-    window.mostrarResultados = function (tipo) {
-      var r = original.apply(this, arguments);
-      try {
-        var lista = (typeof ejercicios !== 'undefined' && ejercicios) ? ejercicios[tipo] : null;
-        var resp = (typeof respuestas !== 'undefined' && respuestas) ? respuestas[tipo] : null;
-        var texto = (document.getElementById('puntuacion-texto-' + tipo) || {}).textContent || '';
-        var m = texto.match(/(\d+)\s+de\s+(\d+)/);
-        var respondidas = resp ? Object.keys(resp).length : 0;
-        if (m && lista && yaRegistrados && !yaRegistrados.has(lista) && respondidas >= Math.ceil(lista.length / 2)) {
-          yaRegistrados.add(lista);
-          var titulo = document.querySelector('#' + tipo + ' h1');
-          registrar({ modulo: limpiarTitulo(titulo && titulo.textContent) || tipo, correctas: Number(m[1]), total: Number(m[2]), curso: 1 });
-        }
-      } catch (e) { /* no interrumpir Applicatzo */ }
-      return r;
-    };
-  }
-
-  // ---- Copia en el cuaderno (si existe) ----
-  if (typeof window.marcarCopiaTerminada === 'function') {
-    var copiaOriginal = window.marcarCopiaTerminada;
-    window.marcarCopiaTerminada = function () {
-      var antes = (typeof copiaTerminada !== 'undefined') ? copiaTerminada : false;
-      var r = copiaOriginal.apply(this, arguments);
-      if (!antes) registrar({ modulo: 'Copia en mi cuaderno', correctas: 0, total: 0, copia: true, curso: 1 });
-      return r;
-    };
-  }
-
-  // ---- 5º básico: todos los contenedores "contenedor-resultados…" ----
-  Array.prototype.forEach.call(document.querySelectorAll('[id^="contenedor-resultados"]'), function (cont) {
-    var modulo = cont.closest('[id^="modulo-"]');
-    if (!modulo || typeof MutationObserver !== 'function') return;
-    var h2 = modulo.querySelector('h2');
-    var nombre = limpiarTitulo(h2 && h2.textContent) || modulo.id.replace(/^modulo-/, '');
-    // "pendiente" = hay una guía nueva sin registrar; se rearma al generar ejercicios
-    // nuevos, así revisar dos veces la misma guía no suma doble.
-    var pendiente = true;
-    modulo.addEventListener('click', function (ev) {
-      var b = ev.target.closest && ev.target.closest('button');
-      if (b && /generar|nuevos/.test(b.id || '')) pendiente = true;
-    }, true);
-    new MutationObserver(function () {
-      if (!pendiente) return;
-      var m = (cont.textContent || '').match(/(\d+)\s*\/\s*(\d+)/);
-      if (!m) return;
-      // Revisar sin haber respondido nada no cuenta como guía terminada.
-      var escribio = Array.prototype.some.call(modulo.querySelectorAll('input'), function (i) {
-        return (i.type === 'radio' || i.type === 'checkbox') ? i.checked : String(i.value || '').trim() !== '';
-      });
-      if (Number(m[1]) === 0 && !escribio) return;
-      pendiente = false;
-      registrar({ modulo: nombre, correctas: Number(m[1]), total: Number(m[2]), curso: 5 });
-    }).observe(cont, { childList: true });
-  });
 
   // ---- Abrir directo en el curso o la sección pedida ----
   try {

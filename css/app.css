@@ -416,3 +416,15 @@ textarea.input { min-height: 140px; }
 .check.chico { min-height: 36px; padding: 4px 10px; font-size: 14px; }
 .aviso.mensaje-nuevo.urgente { background: var(--bad-bg); border-color: var(--bad); color: #7a1f1f; }
 .aviso.mensaje-nuevo.bloqueado { background: #f6f2fb; border-color: #b9a8e8; color: var(--ink); }
+
+/* Tareas: detalle de cada guía de Applicatzo */
+.guias { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.guias-filtro { margin: 10px 0 2px; }
+.guia { background: var(--card); border-radius: 16px; box-shadow: var(--sombra); }
+.guia summary { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; min-height: 56px; list-style: none; }
+.guia summary::-webkit-details-marker { display: none; }
+.guia-cuerpo { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.guia-fila { padding: 8px 12px; border-radius: 10px; border-left: 5px solid var(--ok); background: var(--ok-bg); overflow-wrap: anywhere; }
+.guia-fila.mal { border-left-color: var(--bad); background: var(--bad-bg); }
+.guia-fila p { margin: 2px 0; }
+.etiqueta.nada { background: var(--bad-bg); color: var(--bad); }

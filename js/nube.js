@@ -269,7 +269,14 @@ export function sincronizar() {
       const fid = sesion.familia_id;
 
       // 1) Subir eventos nuevos o modificados en este equipo.
-      const sucios = S.eventos.filter(e => e._s !== version(e));
+      // Un evento demasiado grande sería rechazado y trabaría toda la sincronización:
+      // queda solo en este equipo (el límite de Supabase es 10 KB).
+      const sucios = S.eventos.filter(e => {
+        if (e._s === version(e)) return false;
+        if (new TextEncoder().encode(JSON.stringify(sinMarca(e))).length < 9500) return true;
+        e._s = version(e);
+        return false;
+      });
       for (let i = 0; i < sucios.length; i += 500) {
         const lote = sucios.slice(i, i + 500);
         await api('/rest/v1/eventos', {
